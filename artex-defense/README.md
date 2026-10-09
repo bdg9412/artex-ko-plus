@@ -29,7 +29,7 @@ Docker Desktop 또는 Docker Engine과 Compose v2가 필요합니다. 현재 소
 아래 URL을 **이 저장소의 GitHub URL**로 바꿉니다.
 
 ```sh
-git clone https://github.com/YOUR_ACCOUNT/YOUR_REPOSITORY.git artex-defense
+git clone https://github.com/bdg9412/artex-ko-plus.git artex-defense
 cd artex-defense
 ./scripts/local-start.sh
 ```
