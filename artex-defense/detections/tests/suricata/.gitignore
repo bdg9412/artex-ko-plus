@@ -1,0 +1,5 @@
+# scratch captures created by run.sh (binary pcaps); never committed.
+# Match both files and directories (.scratch.* , not .scratch.*/) so that any
+# leftover .scratch.<name> is ignored even when an interrupted run (SIGKILL,
+# power loss) skips the EXIT cleanup, and so `git check-ignore` reports it.
+.scratch.*

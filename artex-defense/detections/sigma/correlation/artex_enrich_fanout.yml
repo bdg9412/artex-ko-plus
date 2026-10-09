@@ -1,0 +1,37 @@
+# references base rule: ../artex_enrich_user_agent.yml (ARTEX Asset Enrichment Probe User-Agent)
+title: ARTEX Enrichment Fan-Out (One Source, Many Distinct Hosts)
+id: 6fba3b7c-1dd9-4e18-bf55-d93fc1d2e2e0
+status: experimental
+description: |
+    Correlates a single client carrying the ARTEX enrichment User-Agent to many DISTINCT
+    destination hosts within a short window (distinct count of cs-host). Autonomous enrichment
+    fans out across an asset list at machine speed, so breadth — the number of different hosts
+    touched, not just request volume — is what separates it from a person browsing a few pages.
+    Evaluate this where your telemetry spans multiple hosts (CDN, WAF, reverse proxy, or shared
+    hosting) or at an egress point that sees outbound enrichment. As with the base rule, the
+    User-Agent can be changed; the durable signal is the fan-out behaviour, so pair this with the
+    defense guide section 4 and tune the distinct-host threshold and window to your environment.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.reconnaissance
+    - attack.t1595
+    - attack.t1592
+correlation:
+    type: value_count
+    rules:
+        - 34adfa15-1696-4322-afc0-f69988e9cc1e
+    group-by:
+        - c-ip
+    timespan: 10m
+    condition:
+        gte: 20
+        field: cs-host
+falsepositives:
+    - Shared egress (NAT/proxy) where many users appear as one source; a legitimate scanner or
+      uptime monitor that fronts many hosts. Allow-list known sources and raise the threshold.
+level: high

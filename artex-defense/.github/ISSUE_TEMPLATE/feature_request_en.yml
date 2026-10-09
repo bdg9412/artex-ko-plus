@@ -1,0 +1,52 @@
+name: 💡 Feature request
+description: Suggest a new feature or an improvement.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the suggestion. Filling in the fields below helps us align on direction.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched and no similar suggestion is already open.
+          required: true
+        - label: This suggestion does not encourage use outside the authorized scope or beyond applicable law.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem or need does this start from
+      description: Describe the situation you want to solve first. Understanding the problem matters more than the solution.
+      placeholder: "e.g. When I share detection results with my team, I want to export the report as a PDF."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Describe how you think it could be solved.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: If you thought about other approaches, describe them.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: Related area
+      options:
+        - Agent (agent)
+        - Web UI / server (web / server)
+        - LLM provider integration
+        - Documentation / translation
+        - Other
+    validations:
+      required: false

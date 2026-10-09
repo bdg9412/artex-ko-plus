@@ -1,0 +1,35 @@
+# references base rule: ../artex_enrich_user_agent.yml (ARTEX Asset Enrichment Probe User-Agent)
+title: ARTEX Enrichment Scan Velocity (Burst From One Source)
+id: 1d07c5f1-e0ff-4a6a-8017-6008fa790889
+status: experimental
+description: |
+    Correlates a burst of ARTEX asset-enrichment probes from a single client within a short
+    window. The base rule matches the "artex-enrich/1.0" User-Agent; this correlation adds the
+    behaviour the single-request rule misses — velocity. ARTEX enriches assets with a default
+    concurrency of 4 and ships no built-in rate limit (enrich/enrich.go), so an active run emits
+    many enrichment requests in quick succession rather than one. An operator can change the
+    User-Agent, so a quiet result is inconclusive, not proof of safety; see the behaviour-based
+    detection in the defense guide, section 4. Tune the count and window to your own baseline.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.reconnaissance
+    - attack.t1595
+    - attack.t1592
+correlation:
+    type: event_count
+    rules:
+        - 34adfa15-1696-4322-afc0-f69988e9cc1e
+    group-by:
+        - c-ip
+    timespan: 5m
+    condition:
+        gte: 30
+falsepositives:
+    - Legitimate asset-management or monitoring tools that set this User-Agent and poll many
+      assets; allow-list their source addresses.
+level: high

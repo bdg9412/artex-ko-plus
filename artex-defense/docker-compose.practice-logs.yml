@@ -1,0 +1,35 @@
+name: artex-practice-observer
+
+services:
+  observer:
+    image: node@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+    init: true
+    user: "${PRACTICE_UID:-501}:${PRACTICE_GID:-20}"
+    command: ["node", "/app/proxy.mjs"]
+    environment:
+      LOG_DIR: /logs
+    ports:
+      - "127.0.0.1:8791:3000"
+    volumes:
+      - ./scripts/practice-audit-proxy.mjs:/app/proxy.mjs:ro
+      - ./evidence-local/juice-shop-defense/logs:/logs
+    networks:
+      observed:
+        aliases: [juice-shop]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/__artex_health',r=>{r.resume();process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+networks:
+  observed:
+    external: true
+    name: artex-practice-observe

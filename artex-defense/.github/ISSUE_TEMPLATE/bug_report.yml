@@ -1,0 +1,76 @@
+name: 🐛 버그 신고
+description: 동작이 기대와 다르거나 오류가 발생하는 문제를 신고합니다.
+title: "[버그] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        신고해 주셔서 고맙습니다. 아래 항목을 채워 주시면 재현과 수정이 빨라집니다.
+        **보안 취약점은 이 템플릿이 아니라 [SECURITY.md](https://github.com/jiwoochris/artex-ko/security/policy)의 비공개 절차로 신고해 주십시오.**
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 확인
+      options:
+        - label: 비슷한 이슈가 이미 열려 있는지 검색했습니다.
+          required: true
+        - label: 이 문제는 소유·허가 대상 또는 로컬 격리 환경에서 재현한 것입니다.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 무슨 일이 일어났나요
+      description: 기대한 동작과 실제 동작을 함께 적어 주십시오.
+      placeholder: "예: 탐지 결과가 한국어로 나와야 하는데 중국어로 출력됩니다."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 절차
+      description: 문제를 다시 만들어 낼 수 있는 단계를 순서대로 적어 주십시오.
+      placeholder: |
+        1. '...' 화면으로 이동
+        2. '...' 실행
+        3. '...' 에서 오류 발생
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그·스크린샷
+      description: 관련 로그나 화면을 붙여 주십시오. 민감한 값(API 키·토큰·대상 주소)은 가려 주십시오.
+      render: shell
+    validations:
+      required: false
+  - type: dropdown
+    id: component
+    attributes:
+      label: 영역
+      description: 문제가 발생한 구성 요소를 고르십시오.
+      options:
+        - 에이전트 (agent)
+        - 웹 UI / 서버 (web / server)
+        - 설치·배포 (Docker·스크립트)
+        - LLM 공급자 연동
+        - 문서·번역
+        - 잘 모르겠음
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: 버전
+      description: 릴리스 태그 또는 커밋 해시를 적어 주십시오.
+      placeholder: "예: v2.2.0 또는 b45ba04"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 실행 환경
+      description: OS, Docker 사용 여부, LLM 모델 등을 적어 주십시오.
+      placeholder: "예: macOS 15 / Docker Compose / claude-opus-4-8"
+    validations:
+      required: false

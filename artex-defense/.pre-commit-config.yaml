@@ -1,0 +1,40 @@
+# pre-commit 설정 예시 (공식 문서: https://pre-commit.com)
+#
+# 저장소 CI 의 결정론적 머지 게이트 두 가지를 로컬 커밋 단계에서 먼저 통과시켜, 깨진
+# 변경이 푸시 전에 걸리게 한다. 어느 훅이든 단언이 실패하면 0 이 아닌 코드로 끝나 커밋이
+# 멈춘다.
+#
+# 1) detections — 탐지 규칙(detections/)이나 그 규칙이 고정한 상류 소스, 그리고 방어 가이드의
+#    인라인 Sigma 템플릿(docs/defense-{ko,en}.md)이 바뀌는 커밋에서만, 여덟 탐지 테스트와 세
+#    게이트를 한 번에 돌리는 러너(detections/tests/run-all.sh)를 실행한다. CI
+#    (.github/workflows/detections.yml)와 같은 규칙·소스 범위를 먼저 통과시켜, 규칙만 바꾸고
+#    테스트·레이어를 갱신하지 않은 변경, 또는 방어 템플릿을 고치고 그 가이드 주장을 갱신하지
+#    않은 변경을 잡는다. 요구 사항은 Docker 다(각 테스트가 컨테이너에서 격리 실행되고, 러너에는
+#    아무것도 설치하지 않는다).
+# 2) docs — 추적되는 마크다운 문서의 저장소 내부 링크·이미지·앵커(#헤딩) 참조가 실존 대상을
+#    가리키는지 검사한다(scripts/check-doc-links.py). CI(.github/workflows/docs.yml)와 같은
+#    검사이며, 그쪽이 paths 필터 없이 모든 변경에 도는 것과 맞추려고 여기서도 대상 파일을
+#    좁히지 않는다(always_run). 링크는 .md 를 고칠 때뿐 아니라 링크가 가리키던 파일(이미지·
+#    LICENSE 등)을 지우거나 옮길 때도 깨지기 때문이다. 파이썬 표준 라이브러리만 쓰고
+#    네트워크에 접속하지 않아 Docker 없이 수십 ms 안에 끝난다.
+#
+# 설치:        pip install pre-commit && pre-commit install
+# 수동 실행:   pre-commit run detections --all-files
+#              pre-commit run docs --all-files
+#
+# 두 훅만 거는 최소 예시다. Go·웹 린트까지 함께 걸고 싶으면 이 아래에 각자의 훅을 더한다.
+repos:
+  - repo: local
+    hooks:
+      - id: detections
+        name: 탐지 규칙 테스트 8종 (Sigma·Suricata·ATT&CK·지표·MISP)
+        entry: detections/tests/run-all.sh
+        language: script
+        pass_filenames: false
+        files: '^(detections/|enrich/enrich\.go|selfupdate/(github|stage)\.go|guard/guard\.go|db/db\.go|db/schema\.sql|cmd/artex/main\.go|traffic/traffic\.go|docs/defense-(ko|en)\.md)'
+      - id: docs
+        name: 문서 내부 링크·이미지·앵커(#헤딩) 무결성 검사
+        entry: python3 -I scripts/check-doc-links.py
+        language: system
+        pass_filenames: false
+        always_run: true

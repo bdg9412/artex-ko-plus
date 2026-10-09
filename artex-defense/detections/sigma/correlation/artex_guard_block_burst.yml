@@ -1,0 +1,34 @@
+# references base rule: ../artex_guard_audit_framing.yml (ARTEX Platform Guard Audit-Log Framing)
+title: ARTEX Guard-Block Burst (Active Engaged Session)
+id: 065c11b5-4dcf-48ae-84fe-e8301346d5b4
+status: experimental
+description: |
+    Correlates repeated ARTEX platform-guard control markers in one host's application or audit
+    log within a short window. The base rule matches a single marker, which can also appear in a
+    document or source file that merely quotes it. A burst of the same marker on one host instead
+    indicates an ARTEX run that is actively and repeatedly tripping its guard — which both
+    confirms execution on that host and removes the quote-a-marker false positive of the single
+    event. This remains a host and forensic indicator, not a target-side signal. Tune the count
+    and window to your environment.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.execution
+    - attack.t1059
+correlation:
+    type: event_count
+    rules:
+        - 3add497e-36cb-47c4-8993-df8f98585ef7
+    group-by:
+        - host
+    timespan: 10m
+    condition:
+        gte: 5
+falsepositives:
+    - A log pipeline that repeatedly ingests or re-processes a document quoting this marker;
+      scope the rule to runtime application/audit logs, not documentation stores.
+level: high

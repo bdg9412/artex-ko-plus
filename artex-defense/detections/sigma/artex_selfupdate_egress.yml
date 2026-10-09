@@ -1,0 +1,27 @@
+title: ARTEX Self-Update Egress User-Agent
+id: e96380a3-2a34-4237-be2b-088ad9cc947d
+status: experimental
+description: |
+    Detects outbound (egress) HTTP requests whose User-Agent is "artex-selfupdate", used by the
+    ARTEX self-update routine when it queries code-repository hosts (for example GitHub releases)
+    for a newer binary. Seeing this User-Agent leave an internal host toward a code-hosting
+    service suggests an ARTEX binary is installed on that host. This is primarily an operator and
+    forensic indicator on a (possibly compromised relay) host, not a target-side signal.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.command-and-control
+    - attack.t1105
+logsource:
+    category: proxy
+detection:
+    selection:
+        c-useragent: 'artex-selfupdate'
+    condition: selection
+falsepositives:
+    - Unlikely; this User-Agent string is specific to the ARTEX self-update client.
+level: medium

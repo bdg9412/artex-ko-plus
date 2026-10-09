@@ -1,0 +1,25 @@
+# ARTEX network detection - Suricata rules
+# Repo:  https://github.com/jiwoochris/artex-ko
+# Guide: ../../docs/defense-en.md (English) / ../../docs/defense-ko.md (Korean)
+# Index & how-to-test: detections/suricata/README.md
+#
+# SCOPE AND HONESTY - read before deploying:
+#  - These rules target two ARTEX artifacts observable on the wire:
+#    (1) the enrichment prober's HTTP User-Agent "artex-enrich/1.0" (enrich/enrich.go:233),
+#    (2) the norma SDK's WebFetch User-Agent "norma/0.4" (github.com/Autumn-27/norma/tool/webfetch.go).
+#    The recording proxy (traffic/traffic.go) does not modify request headers, so both
+#    UAs reach the target on the wire. Other worker tools (curl, nmap, etc.) use their own
+#    default User-Agents — detect those with generic scanner signatures and ../sigma/.
+#  - The enrich User-Agent is only visible where traffic is plaintext HTTP or inspected
+#    at a TLS-terminating proxy / WAF. End-to-end TLS encrypts it.
+#  - A static User-Agent can be changed by the operator; its absence does NOT imply safety.
+#  - The self-update User-Agent "artex-selfupdate" travels over HTTPS to GitHub and is not
+#    network-observable (TLS SNI alone is too common to alert on) - intentionally omitted.
+#  - The audit-control marker is an operator-side log artifact, not target-facing traffic -
+#    detect it with ../sigma/artex_guard_audit_framing.yml instead.
+
+alert http any any -> any any (msg:"ARTEX enrichment prober User-Agent (artex-enrich)"; flow:established,to_server; http.method; content:"GET"; http.user_agent; content:"artex-enrich/"; startswith; fast_pattern; classtype:attempted-recon; reference:url,github.com/jiwoochris/artex-ko/tree/main/detections/suricata; metadata:created_at 2026_10_05; sid:1000001; rev:1;)
+
+alert http any any -> any any (msg:"ARTEX enrichment prober high-rate enumeration (artex-enrich)"; flow:established,to_server; http.user_agent; content:"artex-enrich/"; startswith; fast_pattern; detection_filter:track by_src, count 30, seconds 300; classtype:attempted-recon; reference:url,github.com/jiwoochris/artex-ko/tree/main/detections/suricata; metadata:created_at 2026_10_05; sid:1000002; rev:1;)
+
+alert http any any -> any any (msg:"ARTEX worker WebFetch User-Agent (norma)"; flow:established,to_server; http.user_agent; content:"norma/"; startswith; fast_pattern; classtype:attempted-recon; reference:url,github.com/jiwoochris/artex-ko/tree/main/detections/suricata; metadata:created_at 2026_10_07; sid:1000003; rev:1;)

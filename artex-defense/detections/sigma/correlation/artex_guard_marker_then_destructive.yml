@@ -1,0 +1,40 @@
+# references base rules:
+#   ../artex_guard_audit_framing.yml   (ARTEX Platform Guard Audit-Log Framing)
+#   ../destructive_command_hunting.yml (Destructive Command Execution — ARTEX Guard-List Hunting)
+title: ARTEX Guard Marker With Destructive Command on One Host
+id: 1a03bfb8-7893-4730-9422-dd50c2dd91e8
+status: experimental
+description: |
+    Temporal correlation for the multi-stage behaviour in the defense guide, section 4.2: on a
+    single host, the ARTEX platform-guard control marker (confirming ARTEX executed there) AND a
+    destructive command from the guard deny-list hunting rule occur within the same window.
+    Pairing an ARTEX-specific marker with the otherwise-generic destructive-command signal raises
+    specificity. A destructive command on its own is routine administration and a known source of
+    false positives; one that co-occurs with an active ARTEX run on the same host is worth
+    investigating. This assumes a normalized host field is present across both the application or
+    audit logs and the process-creation logs; map it in your pipeline. It does not by itself prove
+    ARTEX issued the command — the guard blocks these patterns, so a hit means the destructive
+    command ran outside or despite the guard near an ARTEX run. Treat it as a high-priority lead.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.execution
+    - attack.t1059
+    - attack.impact
+    - attack.t1485
+correlation:
+    type: temporal
+    rules:
+        - 3add497e-36cb-47c4-8993-df8f98585ef7
+        - f510564f-2958-4dc8-a188-3300a2f6f5a7
+    group-by:
+        - host
+    timespan: 30m
+falsepositives:
+    - Maintenance windows where an operator legitimately runs ARTEX and, separately, performs
+      destructive administration on the same host within the window. Confirm with change tickets.
+level: high

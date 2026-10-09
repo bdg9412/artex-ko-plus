@@ -1,0 +1,149 @@
+{
+    "name": "ARTEX detection coverage",
+    "versions": {
+        "attack": "16",
+        "navigator": "5.1.0",
+        "layer": "4.5"
+    },
+    "domain": "enterprise-attack",
+    "description": "MITRE ATT&CK (Enterprise) coverage of the ARTEX detection rules in this repository (detections/sigma, detections/suricata). Every technique below is drawn from the attack.* tags of a rule whose indicator is grounded in this repository's source; nothing is inferred. Score reflects detection strength: 100 = ARTEX-specific signature or behaviour, 50-65 = generic hunting lead that also catches legitimate administration. Maintained by hand from those tags and checked for rule<->layer consistency by detections/tests/attack/run.sh.",
+    "filters": {
+        "platforms": [
+            "PRE",
+            "Windows",
+            "Linux",
+            "macOS",
+            "Network",
+            "Containers"
+        ]
+    },
+    "sorting": 0,
+    "layout": {
+        "layout": "side",
+        "aggregateFunction": "average",
+        "showID": true,
+        "showName": true,
+        "showAggregateScores": false,
+        "countUnscored": false,
+        "expandedSubtechniques": "annotated"
+    },
+    "hideDisabled": false,
+    "techniques": [
+        {
+            "techniqueID": "T1595",
+            "tactic": "reconnaissance",
+            "score": 100,
+            "comment": "ARTEX asset-enrichment probe (User-Agent artex-enrich/1.0). sigma/artex_enrich_user_agent.yml; behaviour via sigma/correlation/artex_enrich_scan_velocity.yml and artex_enrich_fanout.yml; network via suricata sid 1000001/1000002. Defense guide section 2 (target view), 4.1, 4.4.",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1592",
+            "tactic": "reconnaissance",
+            "score": 100,
+            "comment": "ARTEX auto-enrichment gathers victim host info (DNS/HTTP, reads <title>) under User-Agent artex-enrich/1.0. sigma/artex_enrich_user_agent.yml; behaviour via sigma/correlation/artex_enrich_scan_velocity.yml and artex_enrich_fanout.yml; network via suricata sid 1000001/1000002. Defense guide section 2 (target view), 4.4.",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1105",
+            "tactic": "command-and-control",
+            "score": 100,
+            "comment": "ARTEX self-update egress (User-Agent artex-selfupdate) fetching a newer binary from a code-hosting host. sigma/artex_selfupdate_egress.yml. Operator/forensic, not target-side. Defense guide section 2 (operator view), 4.4.",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1059",
+            "tactic": "execution",
+            "score": 100,
+            "comment": "ARTEX platform-guard control marker written to the audit log on a blocked tool call. sigma/artex_guard_audit_framing.yml; behaviour via sigma/correlation/artex_guard_block_burst.yml and artex_guard_marker_then_destructive.yml. Forensic/host-side. Defense guide section 2 (operator view), 4.2.",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1485",
+            "tactic": "impact",
+            "score": 65,
+            "comment": "Destructive data commands (rm -rf, DROP DATABASE, FLUSHALL, ...) mirrored from the ARTEX guard deny list. Generic hunting via sigma/destructive_command_hunting.yml; specificity raised when co-occurring with the guard marker in sigma/correlation/artex_guard_marker_then_destructive.yml. Expect legitimate-admin false positives. Defense guide section 2 (operator view), 4.2.",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1561",
+            "tactic": "impact",
+            "comment": "Parent shown only to surface the scored subtechnique below.",
+            "enabled": true,
+            "showSubtechniques": true
+        },
+        {
+            "techniqueID": "T1561.002",
+            "tactic": "impact",
+            "score": 50,
+            "comment": "Disk-structure wipe commands (mkfs, dd of=/dev/, shred) from the ARTEX guard deny list. Generic hunting lead, not an ARTEX-specific signature. sigma/destructive_command_hunting.yml. Defense guide section 2 (operator view).",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1489",
+            "tactic": "impact",
+            "score": 50,
+            "comment": "Service/availability stop commands (kill -9 -1, killall -9, iptables -F, nft flush ruleset) from the ARTEX guard deny list. Generic hunting lead. sigma/destructive_command_hunting.yml. Defense guide section 2 (operator view).",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1557",
+            "tactic": "credential-access",
+            "score": 50,
+            "comment": "ARTEX embedded recording proxy is an adversary-in-the-middle: it installs a MITM root CA (_ca/mitmproxy-ca-cert.pem) to decrypt and log its worker tools' HTTP(S) traffic, including any credentials in transit. The CA file on a host evidences the recorder having run. sigma/artex_recording_proxy_ca.yml. Forensic/host-side; the bare CA filename is shared with standalone mitmproxy, so it is a hunting lead. Defense guide section 2 (operator view).",
+            "enabled": true,
+            "showSubtechniques": false
+        },
+        {
+            "techniqueID": "T1557",
+            "tactic": "collection",
+            "score": 50,
+            "comment": "ARTEX embedded recording proxy is an adversary-in-the-middle: it installs a MITM root CA (_ca/mitmproxy-ca-cert.pem) to decrypt and log (collect) all of its worker tools' HTTP(S) traffic. The CA file on a host evidences the recorder having run. sigma/artex_recording_proxy_ca.yml. Forensic/host-side; the bare CA filename is shared with standalone mitmproxy, so it is a hunting lead. Defense guide section 2 (operator view).",
+            "enabled": true,
+            "showSubtechniques": false
+        }
+    ],
+    "gradient": {
+        "colors": [
+            "#f0f0f0",
+            "#ffe766",
+            "#1a9850"
+        ],
+        "minValue": 0,
+        "maxValue": 100
+    },
+    "legendItems": [
+        {
+            "label": "ARTEX-specific signature or behaviour (high)",
+            "color": "#1a9850"
+        },
+        {
+            "label": "Generic hunting lead, also catches legit admin (medium)",
+            "color": "#ffe766"
+        }
+    ],
+    "metadata": [
+        {
+            "name": "repository",
+            "value": "https://github.com/jiwoochris/artex-ko"
+        },
+        {
+            "name": "rules",
+            "value": "detections/sigma (9), detections/suricata (2)"
+        },
+        {
+            "name": "consistency-test",
+            "value": "detections/tests/attack/run.sh"
+        }
+    ],
+    "showTacticRowBackground": true,
+    "tacticRowBackground": "#205b8f",
+    "selectTechniquesAcrossTactics": true,
+    "selectSubtechniquesWithParent": false
+}

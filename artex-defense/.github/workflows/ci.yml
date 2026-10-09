@@ -1,0 +1,76 @@
+name: ci
+# 푸시와 PR 마다 빌드·정적 분석·테스트를 돌려, 한국어화 과정에서 생긴 회귀를
+# 머지 전에 잡는다. 릴리스 워크플로(release.yml)는 태그(v*)에서만 돌고 빌드·배포만
+# 하므로, 일상적인 변경을 검증하는 역할은 이 워크플로가 맡는다.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # 빌드·정적 분석·테스트를 데이터베이스 없이 돌린다. 기여자가 저장소를 clone 한 뒤
+  # PostgreSQL 없이 `go test ./...` 를 돌리는 환경을 그대로 재현한다. 데이터베이스가
+  # 있어야 하는 통합 테스트는 이 환경에서 t.Skipf 로 건너뛰므로(스킵은 통과로 집계된다),
+  # 빌드·go vet·DB 를 쓰지 않는 단위 테스트가 전부 green 이어야 한다. 이 조합만으로도
+  # 패키지 경계를 넘나드는 회귀(예: 한 패키지의 문구를 바꾸면서 다른 패키지의 테스트
+  # 단언을 깨뜨리는 경우)를 머지 전에 잡을 수 있다.
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: go build
+        run: go build ./...
+      - name: go vet
+        run: go vet ./...
+      - name: go test (DB 없음 — 통합 테스트는 스킵)
+        run: go test ./... -count=1
+
+  # 실제 PostgreSQL 이 있어야 도는 DB 통합 테스트(알림·증거·사용량 계량 등)를 맡는다.
+  # 위 go job 이 스킵하는 경로(알림 채널 검증, 증거 저장, llm_usage 계량 등)를 실제
+  # 데이터베이스로 강제해, DB 통합 경로에서만 드러나는 한국어화 회귀까지 머지 전에 잡는다.
+  #
+  # 상류의 테스트 하네스는 모든 패키지가 하나의 데이터베이스를 공유하고, 테이블을 한 번만
+  # 만들어 재사용하며, 패키지 실행 순서와 누적 데이터에 암묵적으로 의존하도록 설계되어
+  # 있어, 하나의 데이터베이스에 전체를 몰아 돌리면 서로 다른 방식으로 깨진다(누적 데이터
+  # 오염, 커넥션 teardown 경쟁, 리셋 시 교차 패키지 스키마 의존). 그래서 여기서는 패키지마다
+  # 자체 PostgreSQL 서비스를 띄워 "빈 데이터베이스 + 단일 패키지" 로 격리 실행한다. 각
+  # 패키지가 독립 job(matrix) 으로 돌아 서로의 데이터·커넥션·스키마에 닿지 않으므로 그 세
+  # 상충이 구조적으로 사라진다. db.Open 이 스키마를 자동 마이그레이션하며, llm_usage 처럼
+  # db.Open 이 만들지 않는 테이블은 각 테스트가 EnsureLLMUsageTable 로 스스로 보장한다.
+  go-db:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: [agent, config, db, evidence, llmrec, server]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: artex
+          POSTGRES_PASSWORD: artex
+          POSTGRES_DB: artex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U artex -d artex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: go test (DB 통합 · ${{ matrix.pkg }} 패키지 격리)
+        env:
+          ARTEX_PG_DSN: postgres://artex:artex@localhost:5432/artex?sslmode=disable
+        run: go test ./${{ matrix.pkg }}/ -count=1

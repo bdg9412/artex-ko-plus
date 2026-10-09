@@ -1,0 +1,56 @@
+name: 🌐 번역·현지화 오류
+description: 한국어 번역이 어색하거나 틀렸거나, 번역이 빠진 부분을 신고합니다.
+title: "[번역] "
+labels: ["i18n"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        한국어판의 품질을 높이는 데 도움을 주셔서 고맙습니다.
+        이 저장소의 현지화 방침은 **사용자에게 보이는 산출물만 한국어로 바꾸고, 에이전트의 내부 추론 프롬프트와 명령·페이로드·코드·로그 원문은 원문 그대로 둔다**는 것입니다.
+        자세한 원칙은 [CONTRIBUTING.md](https://github.com/jiwoochris/artex-ko/blob/main/CONTRIBUTING.md#현지화-방침)에 있습니다.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 어떤 종류의 문제인가요
+      options:
+        - 번역이 어색하거나 부자연스러움
+        - 번역이 틀렸음 (의미가 다름)
+        - 번역이 빠졌음 (여전히 중국어·영어로 보임)
+        - 번역하면 안 되는 것이 번역됨 (명령·코드·로그 등)
+        - 용어 통일 필요
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: 어디에서 보이나요
+      options:
+        - 웹 UI
+        - 에이전트 산출물 (탐지 결과·요약·리포트·대화 응답)
+        - 문서 (README 등)
+        - 기타
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: 현재 문구
+      description: 지금 보이는 문구를 그대로 붙여 주십시오. 어느 화면·어느 상황인지도 적어 주시면 좋습니다.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 제안하는 문구
+      description: 어떻게 바꾸면 좋을지 제안해 주십시오. (선택)
+    validations:
+      required: false
+  - type: input
+    id: key
+    attributes:
+      label: 메시지 키 / 파일 위치
+      description: 아는 경우에만. 예를 들어 web/messages/ko.json 의 키나 파일 경로를 적어 주십시오.
+      placeholder: "예: web/messages/ko.json → dashboard.title"
+    validations:
+      required: false

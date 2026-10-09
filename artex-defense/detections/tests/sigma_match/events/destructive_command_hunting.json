@@ -1,0 +1,13 @@
+{
+  "note": "process_creation telemetry (CommandLine). The rule hunts destructive shell/DB/availability commands via '1 of selection_*', so one representative command from each of the three selection groups must match. Benign commands — including a plain 'rm' without the recursive/force flags — must not. (The rule's own false-positive note documents that lowercase coreutils 'truncate' DOES share the TRUNCATE token and must be allow-listed, so it is intentionally not used here as a negative.)",
+  "positive": [
+    {"CommandLine": "rm -rf /var/www/html", "Image": "/usr/bin/rm"},
+    {"CommandLine": "mysql -u root -e 'DROP TABLE customers'", "Image": "/usr/bin/mysql"},
+    {"CommandLine": "iptables -F", "Image": "/usr/sbin/iptables"}
+  ],
+  "negative": [
+    {"CommandLine": "ls -la /var/www/html", "Image": "/usr/bin/ls"},
+    {"CommandLine": "rm /tmp/scratch.txt", "Image": "/usr/bin/rm"},
+    {"CommandLine": "git status", "Image": "/usr/bin/git"}
+  ]
+}

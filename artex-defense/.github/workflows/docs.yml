@@ -1,0 +1,33 @@
+name: docs
+# 추적되는 마크다운 문서의 저장소 내부 링크·이미지 참조가 실존 파일을 가리키는지,
+# 그리고 문서 앵커 링크(#헤딩)가 대상 문서에 실제로 있는 헤딩을 가리키는지 푸시·PR
+# 마다 검사해, 깨진 링크·이미지·앵커가 머지되는 것을 막는다. 링크가 가리키는
+# 파일은 저장소 어디에나 있을 수 있어(예: ../LICENSE·screenshots/ko/*.png) paths
+# 필터 없이 모든 변경에 돌린다. 외부 URL(http/https/mailto)은 네트워크에 의존해
+# flaky 하므로 검사하지 않는다 — scripts/check-doc-links.py 가 내부 참조만 본다.
+# 파이썬 표준 라이브러리만 쓰고 네트워크에 접속하지 않아 결정론적으로 끝나므로,
+# Docker Hub 속도 제한 같은 외부 요인으로 깜빡이지 않는다. Go 빌드·정적 분석·테스트는
+# ci.yml, 탐지 규칙 재현은 detections.yml, 한국어 UI 빌드는 web.yml 이 맡는다.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+# 같은 브랜치에 새 푸시가 오면 앞선 실행을 취소해 불필요한 실행이 쌓이지 않게 한다.
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # python3 는 ubuntu-latest 러너에 기본 설치되어 있고, 스크립트는 표준
+      # 라이브러리만 쓰므로 별도 설치 단계가 필요 없다. -I 로 사용자 사이트·환경을
+      # 격리해 실행한다.
+      - name: 문서 내부 링크·이미지·앵커 무결성 검사
+        run: python3 -I scripts/check-doc-links.py

@@ -1,0 +1,10 @@
+{
+  "note": "file-creation (file_event) telemetry. The rule needs TargetFilename to contain BOTH '_ca' AND 'mitmproxy-ca-cert.pem' (|all), which narrows it to ARTEX's '<dir>/_ca/mitmproxy-ca-cert.pem' layout (traffic/traffic.go). A standalone mitmproxy cert under .mitmproxy/ has the filename but not the '_ca' directory, so it must NOT match — that is the specificity the |all modifier buys.",
+  "positive": [
+    {"TargetFilename": "/home/ubuntu/.local/share/artex/data/_ca/mitmproxy-ca-cert.pem", "Image": "/opt/artex/artex"}
+  ],
+  "negative": [
+    {"TargetFilename": "/home/ubuntu/.mitmproxy/mitmproxy-ca-cert.pem", "Image": "/usr/bin/mitmproxy"},
+    {"TargetFilename": "/etc/ssl/certs/ca-certificates.crt", "Image": "/usr/sbin/update-ca-certificates"}
+  ]
+}

@@ -1,0 +1,37 @@
+title: ARTEX Recording-Proxy MITM CA Certificate Artifact
+id: 3bac40a5-a780-4d1f-a7e8-5d0daa29ef47
+status: experimental
+description: |
+    Detects creation of the man-in-the-middle certificate-authority file the ARTEX recording proxy writes
+    when it starts. ARTEX embeds a go-mitmproxy traffic recorder that decrypts and logs every HTTP(S)
+    exchange its worker tools make; on first start the recorder generates a CA under its data directory
+    (traffic/traffic.go writes "<dir>/_ca/mitmproxy-ca-cert.pem") and injects it into spawned tools through
+    SSL_CERT_FILE / CURL_CA_BUNDLE / REQUESTS_CA_BUNDLE / NODE_EXTRA_CA_CERTS together with an
+    HTTP(S)_PROXY pointing at the loopback recorder (agent/worker.go). The file appearing on a host is a
+    forensic artifact of that recording proxy having run: an adversary-in-the-middle traffic recorder
+    (ATT&CK T1557) whose trust anchor is an installed root certificate. The "_ca/mitmproxy-ca-cert.pem"
+    layout narrows it to ARTEX's data directory; a bare mitmproxy-ca-cert.pem is shared with standalone
+    go-mitmproxy / mitmproxy, so treat a hit as a host-triage lead to correlate with the loopback proxy
+    endpoint and server port (see the indicators list), not a standalone alert.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-07
+tags:
+    - attack.credential-access
+    - attack.collection
+    - attack.t1557
+logsource:
+    category: file_event
+detection:
+    selection:
+        TargetFilename|contains|all:
+            - '_ca'
+            - 'mitmproxy-ca-cert.pem'
+    condition: selection
+falsepositives:
+    - Standalone go-mitmproxy or mitmproxy deployments that write the same CA filename.
+    - Developers intentionally running a recording or debugging proxy on the host.
+level: medium

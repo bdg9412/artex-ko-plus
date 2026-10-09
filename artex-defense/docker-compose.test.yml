@@ -1,0 +1,28 @@
+name: artex-purple-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: artex
+      POSTGRES_DB: artex_test
+      # Disposable, unpublished test database; never uses local app credentials.
+      POSTGRES_PASSWORD: isolated-test-only
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U artex -d artex_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.local
+      target: go-test
+    environment:
+      ARTEX_PG_DSN: postgres://artex:isolated-test-only@postgres:5432/artex_test?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy

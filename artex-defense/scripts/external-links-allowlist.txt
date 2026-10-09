@@ -1,0 +1,13 @@
+# check-external-links.py 가 읽는 "알려진 DOWN" allowlist.
+#
+# 여기 적힌 URL 이 생존 점검에서 DOWN 으로 나오면 ALLOWED 로 분류하고 --strict 종료
+# 코드에 넣지 않는다. 우리가 소유하지 않아 고칠 수 없는, 상류 원문 보존 파일이 물려받은
+# 죽은 링크만 넣는다(우리 저장소가 큐레이션한 링크가 깨지면 allowlist 가 아니라 고친다).
+# 새 항목을 넣을 때는 반드시 "왜 고칠 수 없는가"를 주석으로 남긴다.
+#
+# 형식: 한 줄에 URL 하나. `#` 뒤는 주석, 빈 줄·주석 전용 줄은 무시.
+
+# 상류(Autumn-27/ARTEX) CHANGELOG.zh.md:539 가 크레딧한 기여자 GitHub 프로필.
+# 계정이 개명·삭제돼 404. 상류 원문 보존 방침(BRIEF 경계 #1·MAINTAINING 2절)상
+# CHANGELOG.zh.md 는 상류 그대로 두므로 우리가 고치지 않는다. 2026-10-07 확인.
+https://github.com/begininvoke

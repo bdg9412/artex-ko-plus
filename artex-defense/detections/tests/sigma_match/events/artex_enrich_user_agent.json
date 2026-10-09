@@ -1,0 +1,10 @@
+{
+  "note": "webserver access log. The rule matches cs-user-agent EXACTLY equal to 'artex-enrich/1.0' (enrich/enrich.go:233). A browser UA, and the same UA with a trailing suffix, must not match.",
+  "positive": [
+    {"cs-method": "GET", "cs-uri-stem": "/", "cs-user-agent": "artex-enrich/1.0", "c-ip": "203.0.113.7"}
+  ],
+  "negative": [
+    {"cs-method": "GET", "cs-uri-stem": "/", "cs-user-agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0", "c-ip": "203.0.113.8"},
+    {"cs-method": "GET", "cs-uri-stem": "/robots.txt", "cs-user-agent": "artex-enrich/1.0 (proxied)", "c-ip": "203.0.113.9"}
+  ]
+}

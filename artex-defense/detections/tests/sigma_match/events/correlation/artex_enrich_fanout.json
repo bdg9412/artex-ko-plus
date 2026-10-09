@@ -1,0 +1,864 @@
+{
+  "note": "webserver access log timeline for the ARTEX Enrichment Fan-Out correlation (value_count of DISTINCT cs-host >= 20, grouped by c-ip, within a 10-minute window). 'ts' is relative seconds. Breadth — distinct hosts touched, not request volume — is the signal, so a high-volume/low-breadth burst must stay quiet.",
+  "positive": [
+    {
+      "label": "20 distinct hosts from one source within the 10-minute window",
+      "events": [
+        {
+          "ts": 0,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 25,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 50,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 75,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 100,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host04.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 125,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host05.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 150,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host06.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 175,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host07.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 200,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host08.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 225,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host09.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 250,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host10.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 275,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host11.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 300,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host12.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 325,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host13.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 350,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host14.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 375,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host15.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 400,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host16.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 425,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host17.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 450,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host18.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 475,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host19.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "label": "below the breadth threshold: only 19 distinct hosts",
+      "events": [
+        {
+          "ts": 0,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 25,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 50,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 75,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 100,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host04.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 125,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host05.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 150,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host06.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 175,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host07.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 200,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host08.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 225,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host09.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 250,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host10.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 275,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host11.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 300,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host12.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 325,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host13.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 350,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host14.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 375,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host15.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 400,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host16.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 425,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host17.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 450,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host18.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        }
+      ]
+    },
+    {
+      "label": "20 distinct hosts but spread over ~13 minutes, so no single 10-minute window sees 20",
+      "events": [
+        {
+          "ts": 0,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 40,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 80,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 120,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 160,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host04.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 200,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host05.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 240,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host06.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 280,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host07.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 320,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host08.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 360,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host09.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 400,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host10.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 440,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host11.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 480,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host12.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 520,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host13.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 560,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host14.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 600,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host15.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 640,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host16.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 680,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host17.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 720,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host18.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 760,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host19.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        }
+      ]
+    },
+    {
+      "label": "high volume, low breadth: 25 requests from one source but only 4 distinct hosts",
+      "events": [
+        {
+          "ts": 0,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 20,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 40,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 60,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 80,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 100,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 120,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 140,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 160,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 180,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 200,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 220,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 240,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 260,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 280,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 300,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 320,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 340,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 360,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 380,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 400,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 420,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 440,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 460,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 480,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        }
+      ]
+    },
+    {
+      "label": "breadth split across two sources: 10 distinct hosts each, neither source reaches 20",
+      "events": [
+        {
+          "ts": 0,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host00.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 25,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host01.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 50,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host02.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 75,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host03.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 100,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host04.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 125,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host05.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 150,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host06.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 175,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host07.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 200,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host08.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 225,
+          "c-ip": "10.0.0.9",
+          "cs-host": "host09.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 0,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host10.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 25,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host11.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 50,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host12.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 75,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host13.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 100,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host14.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 125,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host15.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 150,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host16.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 175,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host17.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 200,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host18.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        },
+        {
+          "ts": 225,
+          "c-ip": "10.0.0.10",
+          "cs-host": "host19.example.test",
+          "cs-method": "GET",
+          "cs-uri-stem": "/",
+          "cs-user-agent": "artex-enrich/1.0"
+        }
+      ]
+    }
+  ]
+}

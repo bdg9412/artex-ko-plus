@@ -1,0 +1,9 @@
+{
+  "note": "application log line. The rule is an unbound keyword matching the guard's audit-control framing marker (guard/guard.go). It should match wherever the marker appears in the message, and stay quiet on an ordinary log line.",
+  "positive": [
+    {"message": "2026-10-07T03:11:09Z guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"}
+  ],
+  "negative": [
+    {"message": "2026-10-07T03:11:09Z auth: user login ok uid=42 ip=203.0.113.8"}
+  ]
+}

@@ -1,0 +1,54 @@
+# Build the Korean UI and backend from source; no upstream ARTEX image required.
+FROM node:22-bookworm-slim AS web-source
+WORKDIR /src/web
+ENV NEXT_TELEMETRY_DISABLED=1 HUSKY=0 NODE_OPTIONS=--max-old-space-size=3072
+COPY web/package.json web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --include=dev
+COPY web/ ./
+
+FROM web-source AS web-build
+RUN npm run build:static
+
+FROM golang:1.26.3-bookworm AS go-source
+WORKDIR /src
+ENV CGO_ENABLED=0 GOMAXPROCS=4
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
+COPY . .
+
+# Compile focused integration tests without depending on a frontend build.
+FROM go-source AS go-test
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go test -p 4 -c -o /out/defenseeval.test ./defenseeval && \
+    go test -p 4 -c -o /out/investigation.test ./investigation && \
+    go test -p 4 -c -o /out/agent.test ./agent && \
+    go test -p 4 -c -o /out/securitysource.test ./securitysource && \
+    go test -p 4 -c -o /out/db.test ./db && \
+    go test -p 4 -c -o /out/server.test ./server
+CMD ["/bin/sh", "-c", "/out/defenseeval.test -test.v -test.run '^TestPurple' && /out/investigation.test -test.v && /out/agent.test -test.v -test.run '^TestInvestigator' && /out/securitysource.test -test.v -test.run '^Test(Purple|Investigation)' && /out/db.test -test.v -test.run '^Test(Purple|TaskArchive|FindingRetest|Retest|Investigation)' && /out/server.test -test.v -test.run '^Test(Purple|TaskArchive|FindingRetest|Retest|Investigation)'"]
+
+FROM go-source AS go-build
+COPY --from=web-build /src/web/out/ ./server/webui/dist/
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -p 4 -trimpath -tags embedui -ldflags="-s -w -X main.version=local-dev" -o /out/artex ./cmd/artex
+
+FROM node:22-bookworm-slim AS runtime
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/playwright
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates python3 python3-pip python3-venv ripgrep curl wget vim git jq unzip \
+      dnsutils iputils-ping netcat-openbsd inetutils-telnet whois nmap \
+    && rm -rf /var/lib/apt/lists/*
+RUN npm install -g @playwright/mcp@0.0.83 @playwright/cli@0.1.22 playwright@1.64.0 \
+    && playwright install --with-deps chromium \
+    && npm cache clean --force \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=go-build /out/artex ./artex
+COPY start.sh ./start.sh
+COPY skills/ ./skills/
+RUN chmod +x ./artex ./start.sh
+EXPOSE 8787 8788
+ENTRYPOINT ["/app/start.sh"]
+CMD ["-addr", ":8787", "-proxy", ":8788"]

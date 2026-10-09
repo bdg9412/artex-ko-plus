@@ -1,0 +1,36 @@
+name: external-links
+# 추적 마크다운이 가리키는 외부 링크(방어 가이드의 사고 신고 창구 boho.or.kr·privacy.go.kr·
+# pipc.go.kr·fsec.or.kr, CISA KEV, OWASP·SigmaHQ·Suricata·MITRE·MISP, 원본 데모, GitHub
+# 배지 등)가 아직 살아 있는지 점검한다. 외부 URL 생존은 네트워크·원격 서버 정책에 의존해
+# flaky 하므로 내부 링크 머지 게이트(docs.yml)에서는 보지 않는다. 그래서 이 워크플로는
+# 푸시·PR 이 아니라 주간 스케줄과 수동 실행(workflow_dispatch)으로만 돌아 **머지를 막지 않고**,
+# 외부 링크가 변질·폐쇄되면 주기 실행이 빨갛게 드러낸다. 내부 링크·앵커는 docs.yml, Go 빌드·
+# 분석·테스트는 ci.yml, 탐지 규칙은 detections.yml, 한국어 UI 빌드는 web.yml 이 맡는다.
+#
+# --strict 는 allowlist(scripts/external-links-allowlist.txt)에 없는 DOWN(404·410·5xx·
+# DNS/연결 오류)이 하나라도 있을 때만 실패한다. RESTRICTED(봇 차단·속도 제한 등 호스트는
+# 살아 있는 상태)와 ALLOWED(우리가 고칠 수 없는 상류 상속 죽은 링크)는 실패로 치지 않으므로,
+# 빨간불은 "우리 문서가 큐레이션한 외부 링크가 새로 깨졌다 — 가서 보라"는 신호다. 스케줄
+# 워크플로는 기본 브랜치(main)에서만 돈다.
+on:
+  schedule:
+    - cron: "17 0 * * 1" # 매주 월요일 00:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: external-links-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # python3 는 ubuntu-latest 러너에 기본 설치돼 있고 스크립트는 표준 라이브러리만
+      # 쓰므로 별도 설치가 없다. -I 로 사용자 사이트·환경을 격리해 실행한다.
+      - name: 외부 링크 생존 점검 (브라우저 UA·GET·리다이렉트 추적 · allowlist 제외 · 머지 비차단)
+        run: python3 -I scripts/check-external-links.py --strict

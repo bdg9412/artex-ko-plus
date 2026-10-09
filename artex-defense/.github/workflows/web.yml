@@ -1,0 +1,54 @@
+name: web
+# 한국어 UI(web/)의 정적 내보내기 빌드를 푸시·PR 마다 돌려, 프런트엔드 회귀를
+# 머지 전에 잡는다. 릴리스 워크플로(release.yml)는 태그(v*)에서만 web 을 빌드하는데
+# 이 포크에는 태그 푸시 이력이 없어 한 번도 실행된 적이 없다 — 그래서 일상적인 web
+# 변경(TypeScript·React·i18n·next-intl)을 검증하는 역할은 이 워크플로가 맡는다. Go
+# 쪽 빌드·테스트는 ci.yml 이 맡으므로, 여기서는 web/ 가 바뀔 때만 돈다(paths 필터).
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
+  pull_request:
+    paths:
+      - "web/**"
+      - ".github/workflows/web.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  # 정적 내보내기 빌드가 머지 게이트다. `NEXT_EXPORT=1 next build` 는 next.config 에
+  # typescript.ignoreBuildErrors 설정이 없어 TypeScript 타입 검사까지 함께 수행하므로,
+  # 타입 오류나 내보내기 실패가 있으면 이 잡이 빨갛게 멈춰 머지를 막는다.
+  #
+  # biome 린트도 머지 게이트다. 상류에서 딸려온 선재 린트 부채(G7)를 0 으로 정리한
+  # 뒤(오류 8→0: skills 트리 a11y 6 + package.json 포매터 1 + logo.svg noSvgWithoutTitle 1),
+  # 정보용 단계를 게이트로 승격했다. 이제 `npm run check`(biome check)가 오류를 내면 이
+  # 잡이 빨갛게 멈춰 머지를 막아, 깨끗해진 상태가 다시 더럽혀지는 회귀를 방지한다.
+  # 경고·정보는 종료 코드에 영향이 없어(biome 은 error 레벨에서만 비-0) 머지를 막지 않는다.
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: npm ci
+        run: npm ci
+      - name: build:static (머지 게이트 · 타입 검사 포함)
+        run: npm run build:static
+      - name: UI 한자 누출 가드 (머지 게이트 · out HTML 에 중국어 0)
+        # 이 포크의 핵심 성과는 "사용자에게 보이는 화면에 중국어가 없다"는 것이다.
+        # 기여자가 중국어를 하드코딩하거나 번역이 누락되는 회귀를 머지 전에 막는다.
+        # 스크립트는 git 루트의 web/out 를 스스로 찾으므로 작업 디렉터리와 무관하다.
+        run: python3 -I ../scripts/check-web-cjk.py
+      - name: biome check (머지 게이트 · lint·format·a11y 오류 0 유지)
+        if: always()
+        run: npm run check

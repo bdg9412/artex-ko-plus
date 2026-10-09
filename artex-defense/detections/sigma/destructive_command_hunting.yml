@@ -1,0 +1,64 @@
+title: Destructive Command Execution (ARTEX Guard-List Hunting)
+id: f510564f-2958-4dc8-a188-3300a2f6f5a7
+status: experimental
+description: |
+    Hunts for destructive shell and database commands on a host. The pattern set mirrors the
+    built-in deny rules the ARTEX guard ships with (db/db.go seed): because the guard blocks
+    these, they are the inverse image of the destructive actions an autonomous agent could
+    attempt if the guard were disabled or bypassed. This is GENERIC destructive-command hunting
+    informed by that list, not an ARTEX-specific signature, and matches are expected from
+    legitimate administration. Tune and allow-list for your environment and treat a hit as a
+    hunting lead, not a standalone alert. High-noise availability commands the guard also blocks
+    (bare shutdown/reboot) are intentionally omitted here; hunt those separately. The database
+    patterns likewise track data-destroying objects (DROP DATABASE/TABLE/SCHEMA) rather than the
+    guard's wider DROP set (INDEX/VIEW/USER/ROLE/TABLESPACE), which alter structure or access
+    rather than destroy data and are noisy in routine migrations.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.impact
+    - attack.t1485
+    - attack.t1561.002
+    - attack.t1489
+logsource:
+    category: process_creation
+detection:
+    selection_filesystem:
+        CommandLine|contains:
+            - 'rm -rf'
+            - 'rm -fr'
+            - 'rm --recursive'
+            - '--no-preserve-root'
+            - 'mkfs'
+            - 'dd of=/dev/'
+            - 'shred '
+            - 'wipe /dev/'
+    selection_database:
+        CommandLine|contains:
+            - 'DROP DATABASE'
+            - 'DROP TABLE'
+            - 'DROP SCHEMA'
+            - 'TRUNCATE '
+            - '.dropDatabase('
+            - '.dropCollection('
+            - 'FLUSHALL'
+            - 'FLUSHDB'
+    selection_availability:
+        CommandLine|contains:
+            - 'curl -X DELETE'
+            - 'curl --request DELETE'
+            - 'wget --method=DELETE'
+            - 'iptables -F'
+            - 'nft flush ruleset'
+            - 'kill -9 -1'
+            - 'killall -9'
+    condition: 1 of selection_*
+falsepositives:
+    - Routine system administration, maintenance scripts, and container teardown.
+    - CI/CD pipelines that drop and recreate test databases or caches.
+    - The GNU coreutils `truncate` command (e.g. log rotation `truncate -s 0 file`) shares the TRUNCATE token; allow-list it, since it is followed by a flag rather than a table name.
+level: medium

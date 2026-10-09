@@ -1,0 +1,27 @@
+title: ARTEX Platform Guard Audit-Log Framing
+id: 3add497e-36cb-47c4-8993-df8f98585ef7
+status: experimental
+description: |
+    Detects the control-framing string the ARTEX platform guard writes to its audit log when it
+    blocks a tool call. Blocked calls are recorded with a message beginning with the literal
+    marker shown below (ARTEX platform control, non-target defence). Finding this marker in a
+    host's application or audit logs strongly supports that ARTEX ran on that host. This is a
+    host and forensic indicator, not a target-side signal.
+references:
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-ko.md
+    - https://github.com/jiwoochris/artex-ko/blob/main/docs/defense-en.md
+    - https://github.com/jiwoochris/artex-ko
+author: artex-ko defense guide
+date: 2026-10-05
+tags:
+    - attack.execution
+    - attack.t1059
+logsource:
+    category: application
+detection:
+    keywords:
+        - '【ARTEX 平台管控·非目标防御】'
+    condition: keywords
+falsepositives:
+    - Logs that quote this defense guide or the ARTEX source code for documentation purposes.
+level: high

@@ -1,0 +1,94 @@
+name: detections
+# 탐지 규칙(Sigma·Suricata·ATT&CK 레이어)이 바뀌는 푸시·PR 마다, 그 규칙이 실제로
+# 발화하고, 여러 SIEM 백엔드로 변환되며, 커버리지 레이어가 규칙과 일치하고, 지표가 상류
+# 소스와 여전히 맞으며, SigmaHQ 관례 전체 검증을 통과하는지 재현 테스트로 검증한다. 규칙만
+# 바꾸고 테스트·레이어를 갱신하지 않은 변경은 여기서 빨갛게 드러난다. CONTRIBUTING.md 와
+# detections/tests/README.md 가 약속하는 "여덟 테스트가 기여 계약을 기계적으로 강제한다"를
+# 머지 게이트로 실제로 뒷받침하는 워크플로다. Go 빌드·정적 분석·테스트는 ci.yml 이 맡는다.
+# 여덟 테스트에 더해, 규칙이 아닌 세 게이트도 같은 머지 게이트에서 돈다: 하네스 레지스트리
+# 동기 검사, 호스트 분류 도구(detections/triage/artex_host_triage.py)의 자가 테스트, 그리고
+# 방어 가이드(docs/defense-{ko,en}.md) 안에 산문으로 들어 있는 인라인 Sigma 상관 템플릿의
+# 정합 검사다. 셋 다 여덟 규칙 테스트와 별개이고 run-all.sh 가 똑같이 돌린다. 세 번째 게이트는
+# 그 템플릿이 방어 가이드에 단언한 사실(`sigma check` 통과·splunk/eql/loki 변환·lucene/kusto
+# 상관 미지원·ko/en 규칙 본문 동일)을 재현해, 상류 sigma-cli·백엔드가 올라가 산문이 조용히
+# 낡는 경우를 머지 게이트에서 잡는다.
+#
+# 여덟 테스트는 Docker 만 있으면 돈다(ubuntu-latest 러너에 Docker 가 들어 있다). 러너가
+# sigma-cli·scapy·suricata·python 이미지를 내려받아 컨테이너에서 격리 실행하므로 러너
+# 자체에는 아무것도 설치하지 않고, 규칙 트리와 지표가 가리키는 소스 파일을 읽기 전용으로만
+# 마운트해 저장소에 쓰지 않는다. detections/ 아래가 바뀔 때 외에, 지표 테스트가 고정해 둔
+# 소스 파일이 바뀔 때도 돌린다. enrich·selfupdate·guard·db 의 User-Agent·마커·파괴명령
+# 토큰, cmd/artex/main.go 의 기본 리슨·프록시 포트, traffic/traffic.go 의 MITM CA 인증서
+# 파일명, db/schema.sql 의 탐색 그래프 스키마 지문이 여기에 해당한다. 소스 변경이 지표를
+# 바꿔 규칙·지표 목록이 조용히 낡는 경우를 머지 게이트에서 잡는다. 공개 Docker 이미지를 인증
+# 없이 내려받으므로 드물게 Docker Hub 내려받기 속도 제한에 걸릴 수 있고, 그때는 작업을
+# 다시 돌리면 해소된다.
+on:
+  push:
+    paths:
+      - "detections/**"
+      - "enrich/enrich.go"
+      - "selfupdate/github.go"
+      - "selfupdate/stage.go"
+      - "guard/guard.go"
+      - "db/db.go"
+      - "db/schema.sql"
+      - "cmd/artex/main.go"
+      - "traffic/traffic.go"
+      # 세 번째 게이트(방어 템플릿 정합 검사)가 읽는 두 파일. 이 템플릿이 바뀌면
+      # 재검증해야 하므로 트리거에 넣는다.
+      - "docs/defense-ko.md"
+      - "docs/defense-en.md"
+      - ".github/workflows/detections.yml"
+  pull_request:
+    paths:
+      - "detections/**"
+      - "enrich/enrich.go"
+      - "selfupdate/github.go"
+      - "selfupdate/stage.go"
+      - "guard/guard.go"
+      - "db/db.go"
+      - "db/schema.sql"
+      - "cmd/artex/main.go"
+      - "traffic/traffic.go"
+      - "docs/defense-ko.md"
+      - "docs/defense-en.md"
+      - ".github/workflows/detections.yml"
+
+permissions:
+  contents: read
+
+# 같은 브랜치에 새 푸시가 오면 앞선 실행을 취소해, 자주 푸시하는 동안 불필요한 실행이
+# 쌓이지 않게 한다.
+concurrency:
+  group: detections-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  detections:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: 테스트 하네스 레지스트리 동기 검사 (run-all.sh ↔ CI ↔ 디렉터리)
+        run: detections/tests/check-harness-sync.sh
+      - name: 호스트 트리아지 도구 자가 테스트 (artex_host_triage.py --self-test · 규칙 아닌 게이트)
+        run: detections/tests/triage-selftest.sh
+      - name: 방어 가이드 인라인 Sigma 템플릿 정합 검사 (sigma check·변환 매트릭스·ko/en 본문 동일 · 규칙 아닌 게이트)
+        run: detections/tests/check-defense-template.sh
+      - name: Sigma 규칙 재현 테스트 (sigma check + 백엔드 변환 + 지표 보존)
+        run: detections/tests/sigma/run.sh
+      - name: Sigma 실제 이벤트 매칭 테스트 (원자·상관 규칙이 악성 샘플/타임라인에 발화·정상에 침묵)
+        run: detections/tests/sigma_match/run.sh
+      - name: Sigma SigmaHQ 관례 린트 (전체 검증기 세트 + 문서화된 기준)
+        run: detections/tests/sigma_lint/run.sh
+      - name: Sigma 백엔드 이식성 테스트 (상관 규칙이 여러 백엔드에서 변환되는지 확인)
+        run: detections/tests/sigma_backends/run.sh
+      - name: Suricata 규칙 재현 테스트 (pcap 합성 → suricata -r → 경보 수 단언)
+        run: detections/tests/suricata/run.sh
+      - name: ATT&CK 레이어 ↔ 규칙 정합 테스트
+        run: detections/tests/attack/run.sh
+      - name: 탐지 지표 ↔ 상류 소스 일치 테스트 (상류 재동기화 드리프트 가드)
+        run: detections/tests/indicators/run.sh
+      - name: 지표 MISP 내보내기 ↔ CSV 동기화 테스트 (pymisp 로 MISP 형식 유효성 검증)
+        run: detections/tests/misp/run.sh

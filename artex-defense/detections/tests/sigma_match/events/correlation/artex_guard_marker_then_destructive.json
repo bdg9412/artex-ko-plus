@@ -1,0 +1,81 @@
+{
+  "note": "host timeline joining application/audit logs and process-creation logs for the ARTEX Guard Marker With Destructive Command temporal correlation (both referenced rules must fire on the SAME host within a 30-minute window). 'ts' is relative seconds.",
+  "positive": [
+    {
+      "label": "guard marker then a destructive command on the same host within 30 minutes",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 600,
+          "host": "web01",
+          "CommandLine": "rm -rf / --no-preserve-root",
+          "Image": "/usr/bin/rm"
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "label": "only the guard marker, no destructive command",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 120,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        }
+      ]
+    },
+    {
+      "label": "only a destructive command, no guard marker",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "CommandLine": "rm -rf / --no-preserve-root",
+          "Image": "/usr/bin/rm"
+        }
+      ]
+    },
+    {
+      "label": "both present but ~60 minutes apart, outside the 30-minute window",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 3600,
+          "host": "web01",
+          "CommandLine": "rm -rf / --no-preserve-root",
+          "Image": "/usr/bin/rm"
+        }
+      ]
+    },
+    {
+      "label": "the two legs on different hosts",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 600,
+          "host": "db02",
+          "CommandLine": "rm -rf / --no-preserve-root",
+          "Image": "/usr/bin/rm"
+        }
+      ]
+    }
+  ]
+}

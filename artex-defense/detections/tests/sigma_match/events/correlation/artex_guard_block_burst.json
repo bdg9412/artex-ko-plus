@@ -1,0 +1,152 @@
+{
+  "note": "application/audit log timeline for the ARTEX Guard-Block Burst correlation (event_count >= 5 guard-control markers on one host within a 10-minute window). 'ts' is relative seconds. A single marker can be a quoted string; a burst on one host indicates an actively engaged ARTEX run.",
+  "positive": [
+    {
+      "label": "5 guard-control markers on one host inside the 10-minute window",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 60,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 120,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 180,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 240,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "label": "below the threshold: only 4 markers",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 60,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 120,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 180,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        }
+      ]
+    },
+    {
+      "label": "5 markers but spread over ~13 minutes, so no 10-minute window holds 5",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 200,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 400,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 600,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 800,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        }
+      ]
+    },
+    {
+      "label": "markers split across two hosts: 3 and 2, neither host reaches 5",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 60,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 120,
+          "host": "web01",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 0,
+          "host": "web02",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        },
+        {
+          "ts": 60,
+          "host": "web02",
+          "message": "guard 【ARTEX 平台管控·非目标防御】此操作被禁止: rm -rf /"
+        }
+      ]
+    },
+    {
+      "label": "ordinary log lines on one host, no guard marker (base rule does not match)",
+      "events": [
+        {
+          "ts": 0,
+          "host": "web01",
+          "message": "auth: user login ok uid=42 ip=203.0.113.8"
+        },
+        {
+          "ts": 60,
+          "host": "web01",
+          "message": "auth: user login ok uid=42 ip=203.0.113.8"
+        },
+        {
+          "ts": 120,
+          "host": "web01",
+          "message": "auth: user login ok uid=42 ip=203.0.113.8"
+        },
+        {
+          "ts": 180,
+          "host": "web01",
+          "message": "auth: user login ok uid=42 ip=203.0.113.8"
+        },
+        {
+          "ts": 240,
+          "host": "web01",
+          "message": "auth: user login ok uid=42 ip=203.0.113.8"
+        }
+      ]
+    }
+  ]
+}

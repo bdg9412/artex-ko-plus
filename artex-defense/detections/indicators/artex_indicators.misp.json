@@ -1,0 +1,84 @@
+{
+  "Event": {
+    "uuid": "1a5aa723-0e87-4cbe-97f4-c84f93e4efeb",
+    "info": "ARTEX (autonomous AI pentest framework) — defensive host/network fingerprints",
+    "date": "2026-10-07",
+    "threat_level_id": "4",
+    "analysis": "2",
+    "distribution": "3",
+    "published": false,
+    "Orgc": {
+      "name": "artex-ko",
+      "uuid": "fff4e6e6-a076-433d-9a12-873ff60de4e6"
+    },
+    "Tag": [
+      { "name": "tlp:clear" },
+      { "name": "type:OSINT" }
+    ],
+    "Attribute": [
+      {
+        "uuid": "cb9d8f4e-cef3-44a4-8499-457620861b74",
+        "type": "user-agent",
+        "category": "Network activity",
+        "to_ids": true,
+        "disable_correlation": false,
+        "value": "artex-enrich/1.0",
+        "comment": "ARTEX asset-enrichment prober User-Agent (enrich/enrich.go). Target-side. An operator can change it, so absence is not safety. Sigma: artex_enrich_user_agent.yml."
+      },
+      {
+        "uuid": "dbe975a6-0a12-43a7-a8e8-4bd0ba65daea",
+        "type": "user-agent",
+        "category": "Network activity",
+        "to_ids": true,
+        "disable_correlation": false,
+        "value": "artex-selfupdate",
+        "comment": "ARTEX self-update egress User-Agent to the release host (selfupdate/github.go, selfupdate/stage.go). Seen in outbound logs from an ARTEX host. Sigma: artex_selfupdate_egress.yml."
+      },
+      {
+        "uuid": "053cbbbd-c345-49f0-b6e3-1b6f6075a218",
+        "type": "pattern-in-file",
+        "category": "Artifacts dropped",
+        "to_ids": true,
+        "disable_correlation": false,
+        "value": "【ARTEX 平台管控·非目标防御】",
+        "comment": "Control-framing prefix ARTEX writes to its audit log on a blocked tool call (guard/guard.go). Its presence in audit records supports an ARTEX-execution finding. Sigma: artex_guard_audit_framing.yml."
+      },
+      {
+        "uuid": "d5fe7761-c297-4e35-acfe-a3a4a5f01f7b",
+        "type": "port",
+        "category": "Network activity",
+        "to_ids": false,
+        "disable_correlation": true,
+        "value": "8787",
+        "comment": "Default ARTEX server HTTP listen port (cmd/artex/main.go --addr). Host-triage hint, not a blocking indicator; check with ss/netstat on a suspected host."
+      },
+      {
+        "uuid": "b575c98a-629d-42d4-bac0-3280f6c6c6b8",
+        "type": "ip-dst|port",
+        "category": "Network activity",
+        "to_ids": false,
+        "disable_correlation": true,
+        "value": "127.0.0.1|8788",
+        "comment": "Default loopback traffic-recording MITM proxy endpoint (cmd/artex/main.go --proxy). Loopback — a host-triage hint, not a network block; check with ss/netstat."
+      },
+      {
+        "uuid": "7628f0dc-d5f8-45ea-8aec-64843667658e",
+        "type": "pattern-in-file",
+        "category": "Artifacts dropped",
+        "to_ids": true,
+        "disable_correlation": false,
+        "value": "mitmproxy-ca-cert.pem",
+        "comment": "MITM CA certificate file the ARTEX recording proxy writes on first start (traffic/traffic.go, under <dir>/_ca/); injected into spawned tools via SSL_CERT_FILE/CURL_CA_BUNDLE/REQUESTS_CA_BUNDLE/NODE_EXTRA_CA_CERTS with a loopback HTTP_PROXY. Evidences the recorder having run; the bare filename is shared with standalone mitmproxy, so it is a host-triage lead. Sigma: artex_recording_proxy_ca.yml."
+      },
+      {
+        "uuid": "134f14d2-0af0-4a4b-89bb-805ab5f2b1a7",
+        "type": "other",
+        "category": "Other",
+        "to_ids": false,
+        "disable_correlation": true,
+        "value": "exploration_nodes",
+        "comment": "ARTEX exploration-graph table in its PostgreSQL store (db/schema.sql); with exploration_edges/exploration_anchors/assets/companies/activity and an agent_prompts seed it forms the ARTEX dual-graph schema. Host-triage lead checked by inspecting the database, not a blocking IoC."
+      }
+    ]
+  }
+}

@@ -1,0 +1,181 @@
+name: release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # Release 생성에 필요
+
+jobs:
+  # ① 프런트엔드 정적 내보내기(한 번 수행), 산출물을 각 플랫폼 크로스 컴파일에서 재사용
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build:static
+        working-directory: web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/out
+
+  # ② 5개 플랫폼 크로스 컴파일(프런트엔드 내장) + zip 패키징
+  binaries:
+    needs: frontend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: server/webui/dist
+      - name: Build and package with build.sh
+        env:
+          ARTEX_TARGET_OS: ${{ matrix.goos }}
+          ARTEX_TARGET_ARCH: ${{ matrix.goarch }}
+          ARTEX_BUILD_VERSION: ${{ github.ref_name }}
+          ARTEX_SKIP_FRONTEND: "1"
+          ARTEX_SKIP_NPM_CI: "1"
+          # UPX 자가 압축 해제 ELF 는 일부 Linux 커널·가상화·보안 정책에서 크래시가 난다.
+          # Release 는 Go linker 스트립과 zip 압축을 사용해 이식성을 우선 보장한다.
+          ARTEX_COMPRESS: "0"
+          ARTEX_PACKAGE: "1"
+          ARTEX_PACKAGE_DIR: dist
+        run: |
+          ./build.sh --target "${ARTEX_TARGET_OS}/${ARTEX_TARGET_ARCH}"
+      - name: Smoke test Linux amd64 binary
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: dist/artex-linux-amd64/artex -h
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: "dist/*.zip"
+      # Linux 원본 바이너리를 따로 업로드해 docker job 에서 재사용한다(이미지 안에서 프런트엔드+Go 를 다시 빌드하지 않도록)
+      - if: matrix.goos == 'linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bin-linux-${{ matrix.goarch }}
+          path: dist/artex-linux-${{ matrix.goarch }}/artex
+
+  # ③ 모든 zip 을 모아 → GitHub Release 생성
+  release:
+    needs: binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          merge-multiple: true
+          path: dist
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum *.zip > SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.zip
+            dist/SHA256SUMS
+          generate_release_notes: true
+
+  # ④-0 발행 자격증명 게이트: DOCKERHUB 시크릿이 설정된 경우에만 docker 잡을 실행한다.
+  #     시크릿이 없으면 docker 잡을 건너뛰어(skipped) 릴리스 CI 가 빨간 X 없이 끝나게 한다.
+  #     GitHub Actions 는 잡 수준 if 에서 secrets 를 직접 참조할 수 없어, 시크릿 존재
+  #     여부를 이 잡의 출력으로 넘긴 뒤 docker 잡의 if 조건으로 쓴다.
+  #     어느 네임스페이스로 발행할지는 별도 결정 사안이다(G6·DECISIONS 8). 발행을 켤 때
+  #     네임스페이스를 상류 플레이스홀더에서 바꿔야 하며, 안 바꾸면 docker 잡의 가드 스텝이
+  #     빌드 전에 중단시킨다(docker 잡 env.IMAGE_NAMESPACE 주석 참조).
+  docker-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      publish: ${{ steps.check.outputs.publish }}
+    steps:
+      - name: Docker Hub 발행 자격증명 확인
+        id: check
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN 시크릿이 없어 Docker 이미지 발행(docker 잡)을 건너뜁니다. 바이너리 릴리스는 정상 진행됩니다."
+          fi
+
+  # ④ 다중 아키텍처 이미지 → Docker Hub 에 push(binaries 가 빌드한 Linux 바이너리를 재사용하고,
+  #    이미지에는 도구만 설치 + 바이너리만 배치; arm64 는 apt 계층만 에뮬레이션하면 되어 빌드가 훨씬 빠르다)
+  docker:
+    needs: [binaries, docker-gate]
+    if: needs.docker-gate.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    env:
+      # ⚠️ 발행 네임스페이스 — 이 기본값은 상류 원작자(Autumn-27) 소유의 플레이스홀더이고,
+      #    이 포크는 이 네임스페이스에 push 권한이 없다(G139 로 Docker Hub 에서 이미 삭제된
+      #    바로 그 저장소다). 발행을 켜기 전(DOCKERHUB 시크릿을 넣기 전)에 반드시 **본인이
+      #    소유한** 네임스페이스로 바꿔야 한다(예: jiwoochris/artex-ko 또는
+      #    ghcr.io/jiwoochris/artex-ko). 어느 이름으로 발행할지는 G6·DECISIONS 8 결정 사안이라
+      #    기본값은 상류 그대로 둔다. 안 바꾼 채로 발행을 켜면 아래 가드 스텝이 빌드 전에 명확한
+      #    메시지로 중단시킨다(그대로 뒀다면 맨 끝 push 가 denied 로 늦게 실패한다).
+      IMAGE_NAMESPACE: autumn27/artex
+    steps:
+      # 발행 네임스페이스가 상류 플레이스홀더인 채로 발행이 켜지면 docker/login 은
+      # 메인테이너 계정으로 성공하지만 push 대상이 남의 네임스페이스라 맨 끝 build-push
+      # 단계에서 denied 로 실패한다. 그 늦고 혼란스러운 실패 대신 빌드 전에 여기서 조기
+      # 중단한다(네임스페이스 값을 고르는 것이 아니라 "아직 안 바꿨다"만 잡는다 — 값 결정은
+      # G6·DECISIONS 8 소관).
+      - name: 발행 네임스페이스가 상류 플레이스홀더인지 확인 (조기 중단)
+        run: |
+          if [ "${IMAGE_NAMESPACE}" = "autumn27/artex" ]; then
+            echo "::error::이미지 네임스페이스가 아직 상류 플레이스홀더 'autumn27/artex' 입니다. 이 포크는 이 네임스페이스에 push 권한이 없어 발행이 denied 로 실패합니다. release.yml 의 docker 잡 env.IMAGE_NAMESPACE 를 본인이 소유한 네임스페이스(예: jiwoochris/artex-ko, 또는 ghcr.io/jiwoochris/artex-ko)로 바꾼 뒤 다시 태그를 올리세요. 어느 이름으로 발행할지는 G6·DECISIONS 8 결정 사안입니다."
+            exit 1
+          fi
+      - uses: actions/checkout@v4 # Dockerfile 과 skills/ 를 가져온다
+      - uses: actions/download-artifact@v4
+        with:
+          name: bin-linux-amd64
+          path: dist/amd64
+      - uses: actions/download-artifact@v4
+        with:
+          name: bin-linux-arm64
+          path: dist/arm64
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}
+          tags: |
+            type=ref,event=tag
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

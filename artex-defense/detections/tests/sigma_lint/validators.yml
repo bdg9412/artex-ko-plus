@@ -1,0 +1,44 @@
+# SigmaHQ validator baseline for the ARTEX detection rules.
+#
+# `sigma check` on its own runs only pySigma's core validators. This config turns
+# on the full SigmaHQ convention set (the pySigma-validators-sigmahq plugin) and
+# then disables four checks that encode SigmaHQ *monorepo* conventions which do
+# not apply to this small, self-contained rule set. Every other SigmaHQ check is
+# enforced, and detections/tests/sigma_lint/ fails the build if any enabled check
+# reports an issue. Each exclusion below is a deliberate, documented decision, not
+# a silenced defect.
+#
+# Run:
+#   pip install pySigma-validators-sigmahq
+#   sigma check --validation-config detections/tests/sigma_lint/validators.yml detections/sigma/
+#
+validators:
+  - all
+
+  # sigmahq_github_link wants every `references:` URL to be a commit permalink
+  # rather than a branch link. That check exists so rules citing external,
+  # third-party write-ups keep pointing at the exact revision they were written
+  # against. Our references point at *our own* living defense docs
+  # (docs/defense-ko.md, docs/defense-en.md) on `main`: we want them to track the
+  # current guide, not freeze to a snapshot that goes stale as the guide improves.
+  - -sigmahq_github_link
+
+  # sigmahq_filename_prefix and sigmahq_correlation_filename_prefix require
+  # logsource-prefixed filenames (web_*, proxy_*) and a correlation_* prefix, the
+  # filing scheme of SigmaHQ's single flat rules/ tree. This repository ships a
+  # small set under detections/sigma/ with descriptive artex_* names and a
+  # correlation/ subdirectory, referenced by the correlation rules' header
+  # comments, the reproduction tests, and the README index. Renaming to the
+  # monorepo prefixes would desynchronize those references for no gain on a
+  # standalone set.
+  - -sigmahq_filename_prefix
+  - -sigmahq_correlation_filename_prefix
+
+  # sigmahq_logsource_unknown flags `category: application` (the guard-marker
+  # forensic log search) and a product-less `category: process_creation` (the
+  # cross-platform destructive-command hunting lead) as outside the SigmaHQ
+  # taxonomy. Both logsources are intentionally generic: these indicators appear
+  # across heterogeneous application/audit and process-creation logs, and the
+  # README tells defenders to map them to their own pipeline. Pinning a single
+  # product would narrow the rules incorrectly.
+  - -sigmahq_logsource_unknown

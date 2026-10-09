@@ -1,0 +1,9 @@
+{
+  "note": "forward-proxy egress log. The rule matches c-useragent EXACTLY equal to 'artex-selfupdate' (selfupdate/github.go), the UA ARTEX sets when it fetches its own release from GitHub. A generic client UA must not match.",
+  "positive": [
+    {"c-useragent": "artex-selfupdate", "cs-host": "github.com", "cs-uri-stem": "/Autumn-27/ARTEX/releases/latest"}
+  ],
+  "negative": [
+    {"c-useragent": "curl/8.5.0", "cs-host": "github.com", "cs-uri-stem": "/"}
+  ]
+}

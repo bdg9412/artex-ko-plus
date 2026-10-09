@@ -1,0 +1,52 @@
+name: 💡 기능 제안
+description: 새로운 기능이나 개선 아이디어를 제안합니다.
+title: "[제안] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        아이디어를 제안해 주셔서 고맙습니다. 아래 항목을 채워 주시면 방향을 맞추기 좋습니다.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: 확인
+      options:
+        - label: 비슷한 제안이 이미 열려 있는지 검색했습니다.
+          required: true
+        - label: 이 제안은 허가된 사용 범위와 국내법을 벗어난 사용을 조장하지 않습니다.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 어떤 문제·필요에서 출발했나요
+      description: 해결하려는 상황을 먼저 적어 주십시오. 해결책보다 문제를 아는 것이 더 중요합니다.
+      placeholder: "예: 탐지 결과를 팀에 공유할 때 리포트를 PDF 로 내보내고 싶습니다."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 제안하는 방식
+      description: 어떻게 해결하면 좋을지 적어 주십시오.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 고려한 대안
+      description: 다른 방법을 생각해 봤다면 적어 주십시오.
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: 관련 영역
+      options:
+        - 에이전트 (agent)
+        - 웹 UI / 서버 (web / server)
+        - LLM 공급자 연동
+        - 문서·번역
+        - 기타
+    validations:
+      required: false

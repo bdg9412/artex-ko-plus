@@ -1,0 +1,76 @@
+name: 🐛 Bug report
+description: Report behavior that differs from what you expected, or an error.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. Filling in the fields below helps us reproduce and fix it faster.
+        **Do not use this template for security vulnerabilities. Report them through the private process in [SECURITY.en.md](https://github.com/jiwoochris/artex-ko/blob/main/SECURITY.en.md).**
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched and no similar issue is already open.
+          required: true
+        - label: I reproduced this on a target I own or am authorized to test, or in a local isolated environment.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: Describe both the expected behavior and the actual behavior.
+      placeholder: "e.g. Detection results should be in Korean, but they are printed in Chinese."
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: List, in order, the steps that recreate the problem.
+      placeholder: |
+        1. Go to the '...' screen
+        2. Run '...'
+        3. An error occurs at '...'
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Paste relevant logs or screenshots. Please redact sensitive values (API keys, tokens, target addresses).
+      render: shell
+    validations:
+      required: false
+  - type: dropdown
+    id: component
+    attributes:
+      label: Area
+      description: Pick the component where the problem occurred.
+      options:
+        - Agent (agent)
+        - Web UI / server (web / server)
+        - Install / deploy (Docker / scripts)
+        - LLM provider integration
+        - Documentation / translation
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Enter the release tag or commit hash.
+      placeholder: "e.g. v2.2.0 or b45ba04"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, whether you use Docker, the LLM model, and so on.
+      placeholder: "e.g. macOS 15 / Docker Compose / claude-opus-4-8"
+    validations:
+      required: false

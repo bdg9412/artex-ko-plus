@@ -1,0 +1,87 @@
+# backend
+/data/
+*.db
+*.db-wal
+*.db-shm
+config.json
+scheduler_state.json
+__pycache__/
+*.pyc
+*.pyo
+
+# frontend
+web/node_modules/
+web/.next/
+web/out/
+web/tsconfig.tsbuildinfo
+web/next-env.d.ts
+*.local
+!Dockerfile.local
+
+# development tools
+.playwright-mcp/
+.playwright-cli/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# os
+.DS_Store
+Thumbs.db
+
+# claude code local state
+.claude/
+
+# 内嵌前端的单二进制产物
+/artex
+# 一键更新在可执行文件旁留下的中间产物（暂存件 / 备份 / 失败版本 / 升级标记）
+/artex.new
+/artex.new.sha256
+/artex.old
+/artex.failed
+/artex.upgrade.json
+/server/webui/dist/
+/dist/
+
+# JWT 签名密钥（运行时生成，存项目根，绝不提交）
+/jwt.key
+
+# Docker 部署生成的本地环境（含密码/密钥，不提交）
+.env
+.env.*
+!.env.example
+
+# 调度器运行/模拟产生的事件日志（测试产物，不提交）
+*-events.csv
+
+# bench 基准测试相关（本地产物，不提交）
+/bench/
+/Dockerfile.bench
+/Dockerfile.bench.v2
+# --- artex-ko 로컬 운영: 커밋 금지 (소유자 지시: 테스트/스캔 결과 비공개) ---
+work/
+test-results/
+scan-output/
+evidence-local/
+# 데모 앱을 로컬에서 기동하면 생기는 런타임 데이터(녹화 프록시 트래픽 인덱스 DB·
+# mitmproxy CA 개인키 등)라 공개 저장소에 커밋하지 않는다(BRIEF 경계 #2).
+/demo-data/
+*.local.env
+.local-runtime/
+/transcripts/
+/release-artifacts/
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+# D2 모델 비교 라이브 테스트: package agent 내부라 work/ 밖에 둘 수밖에 없고,
+# OPENROUTER_API_KEY·네트워크를 소비하는 로컬 전용 산출물이라 공개 저장소에
+# 커밋하지 않는다(BRIEF 경계 #2). 정확한 경로만 막아 상류 추적 테스트는 건드리지 않는다.
+agent/d2_models_live_test.go
+
+# API 키·비밀: 어디에 두든 커밋 금지
+*.env
+secrets.env

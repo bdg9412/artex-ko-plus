@@ -1,0 +1,56 @@
+name: 🌐 Translation / localization issue
+description: Report a Korean translation that reads awkwardly, is wrong, or is missing.
+title: "[translation] "
+labels: ["i18n"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping improve the quality of the Korean edition.
+        This repository's localization policy: **translate only user-facing output into Korean, and leave the agent's internal reasoning prompts and the original commands, payloads, code, and logs unchanged.**
+        The full principles are in [CONTRIBUTING.en.md](https://github.com/jiwoochris/artex-ko/blob/main/CONTRIBUTING.en.md#localization-policy).
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem is it
+      options:
+        - A translation reads awkwardly or unnaturally
+        - A translation is wrong (the meaning differs)
+        - A translation is missing (still shows Chinese / English)
+        - Something that should not be translated was translated (commands, code, logs, etc.)
+        - Terminology needs to be unified
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where do you see it
+      options:
+        - Web UI
+        - Agent output (detection results, summaries, reports, chat responses)
+        - Documentation (README, etc.)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current text
+      description: Paste the text exactly as it appears now. Saying which screen or situation it is in helps too.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested text
+      description: Suggest how it could be changed. (Optional)
+    validations:
+      required: false
+  - type: input
+    id: key
+    attributes:
+      label: Message key / file location
+      description: Only if you know it. For example, a key in web/messages/ko.json or a file path.
+      placeholder: "e.g. web/messages/ko.json → dashboard.title"
+    validations:
+      required: false
