@@ -68,15 +68,15 @@ docker compose --env-file .env.local -f docker-compose.local.yml stop
 
 **파일로 방어 검증:** 감사 2건·경보 2건에서 탐지 기록을 확인했지만, 차단 여부는 근거 부족으로 판단 불가입니다.
 
-![파일 근거 기반 방어 검증의 탐지·차단 판정](docs/evidence/images/02-defense-validation.png)
+![파일 근거 기반 방어 검증의 탐지·차단 판정](artex-defense/docs/evidence/images/02-defense-validation.png)
 
 **로그 근거부터 준비:** 파일 또는 Splunk로 대상·기간·경로를 지정하고 저장한 뒤 AI 조사를 시작합니다.
 
-![침해 조사의 로그 근거 준비 화면](docs/evidence/images/03-investigation-setup.png)
+![침해 조사의 로그 근거 준비 화면](artex-defense/docs/evidence/images/03-investigation-setup.png)
 
 **실제 AI 실행 이력:** 모델 호출 2회 뒤 사용자 중지한 실행입니다. 로그 조회는 0회이며, 아래 가설은 분석 완료 결과가 아닙니다.
 
-![사용자 중지된 AI 조사와 보존된 가설](docs/evidence/images/04-investigation-trace.png)
+![사용자 중지된 AI 조사와 보존된 가설](artex-defense/docs/evidence/images/04-investigation-trace.png)
 
 공개 증적의 Juice Shop은 기능을 확인하기 위해 **별도로 띄운 실습 대상**이며 제품의 설치 구성에 포함되지 않습니다. 운영 DB, 원본 로그, LLM 키, JWT 키는 배포하지 않습니다. 모의 Splunk 테스트는 연결·범위 제한·증거 보존을 검증합니다. **실제 기업 Splunk 연결이나 탐지 정확도를 입증한 것은 아닙니다.** 공개한 실제 AI 조사 이력은 사용자 중지 상태이므로 완주·침해 확정 성공 사례로 제시하지 않습니다.
 
