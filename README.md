@@ -15,11 +15,12 @@ AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-
 ## 모델 선택과 출력 언어
 
 **시스템 → LLM → 새 프로필**에서 모델 연결을 직접 선택할 수 있습니다. 화면에서 제공하는 형식은 **Anthropic**, **OpenAI (Chat Completions)**, **OpenAI (Responses API)**, **Ollama**, **Amazon Bedrock Converse**입니다. 프로필마다 모델 ID와 연결 주소를 지정할 수 있으며, 여러 프로필을 저장해 작업의 **LLM 설정 체인**에서 선택할 수도 있습니다.  
+  
 선택 가능 모델
 -  Antropic
 -  OpenAI
--  Ollama
--  AWS Bedrock
+-  Ollama 로컬 모델
+-  AWS Bedrock 모델
 
 
 ![새 프로필의 LLM 제공자 선택 목록](docs/guide-images/llm-model-selection-20261026.jpg)
