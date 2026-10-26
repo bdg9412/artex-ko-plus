@@ -421,7 +421,11 @@ func (w *Worker) execute(ctx context.Context, name string, taskID int64, as *db.
 	if as != nil {
 		if ids := intentAssetIDs(intent); len(ids) > 0 {
 			if assets, err := as.GetByIDs(ids); err == nil && len(assets) > 0 {
-				if b, err := json.Marshal(assets); err == nil {
+				assetContext := any(assets)
+				if diagnosticGuard != nil {
+					assetContext = diagnosticWorkerAssets(assets)
+				}
+				if b, err := json.Marshal(assetContext); err == nil {
 					sysBody += "\n\n本意图 asset_ids 对应的目标资产：\n" + string(b)
 				}
 				// 意图明确针对的这些资产 → 自动纳入任务测试范围（与 insertAssets 同一套
@@ -446,13 +450,14 @@ func (w *Worker) execute(ctx context.Context, name string, taskID int64, as *db.
 		settle = wrapupSettlementForTask("worker", []string{"Bash"}, clamped)
 	}
 	opts := agentcore.Options{
-		Provider:        w.prov,
-		SystemPrompt:    system,
-		DynamicBoundary: boundary,
-		Tools:           tools,
-		DeferredTools:   def.Deferred,
-		UnlockSet:       def.Unlock,
-		PermissionMode:  permission.ModeBypass,
+		Provider:               w.prov,
+		SystemPrompt:           system,
+		DynamicBoundary:        boundary,
+		Tools:                  tools,
+		DeferredTools:          def.Deferred,
+		UnlockSet:              def.Unlock,
+		PermissionMode:         permission.ModeBypass,
+		DisableBackgroundTasks: diagnosticGuard != nil,
 		// WebFetch 走记录代理，其 HTTP 与 curl 一样被留痕；载入代理 CA 让经 MITM
 		// 重签的 HTTPS 证书能【正常校验通过】（而非关掉校验）。proxy 空则直连。
 		EnableWebFetch: diagnosticGuard == nil,

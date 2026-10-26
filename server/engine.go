@@ -93,11 +93,13 @@ const (
 	errDetachedWorkerNotReady      = "Worker 가 아직 준비되지 않았습니다"
 )
 
-// retryableWorkerModelError excludes errors already handled by the task router.
-// In particular, a quota error after partial streaming advances the task cursor
-// for the next LLM call but must not replay this whole intent on the backup.
+// retryableWorkerModelError excludes errors already handled by the task router
+// and deterministic request failures. Replaying the whole intent cannot repair
+// an Ollama context-window 400 (or another rejected 4xx request).
+// A quota error after partial streaming advances the task cursor for the next
+// LLM call but must not replay this whole intent on the backup.
 func retryableWorkerModelError(reason harness.TerminalReason, err error) bool {
-	return reason == harness.ReasonModelError && !isTaskLLMRuntimeError(err)
+	return reason == harness.ReasonModelError && !isTaskLLMRuntimeError(err) && isRetryableStreamError(err)
 }
 
 // Engine drives the event-driven exploration loop with real LLM agents
@@ -874,11 +876,9 @@ func (e *Engine) plannerLoop(ctx context.Context, t *Task) {
 		if e.isSettling(t.ID) {
 			return
 		}
-		// A diagnostic handoff already has one evidence-backed verification
-		// intent. A queued task can arrive here with a buffered Resume notify,
-		// even though Run correctly skips its initial planner kick. Wait until
-		// that Worker settles, then its NotifyDone drives the first LLM plan.
-		// Keep other ARTEX tasks and later diagnostic planning unchanged.
+		// A queued diagnostic task can arrive here with a buffered Resume
+		// notification even though Run skipped its initial planner kick. Let
+		// its first Worker settle before planning from the collected evidence.
 		if _, diagnostic := diagnosticBootstrapGoal(t); diagnostic {
 			if active, err := t.Store.HasActiveIntentByOrigin("diagnostic-bootstrap"); err == nil && active {
 				return

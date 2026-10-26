@@ -262,6 +262,107 @@ func pidList(raw []json.RawMessage) []int64 {
 	return out
 }
 
+// boundGraphOverview limits the text repeated in every planner/worker wake-up.
+// The overview is an index, not an evidence store: node ids, states, counts,
+// lineage, coverage and exact scope values stay intact. The full text remains
+// available through node_detail, list_facts, list_goals and expand_digest.
+// Section budgets prevent a large frontier from hiding every recent fact.
+func boundGraphOverview(out map[string]any) {
+	truncated := false
+	if task, ok := out["task"].(map[string]any); ok {
+		budget := overviewTextBudget{remaining: 900}
+		task["goal"] = budget.take(task["goal"], 650)
+		task["description"] = budget.take(task["description"], 250)
+		truncated = truncated || budget.truncated
+	}
+	for _, section := range []struct {
+		name, field     string
+		budget, perItem int
+	}{
+		{"goals", "text", 1000, 250},
+		{"open_intents", "summary", 1300, 200},
+		{"running_intents", "summary", 500, 160},
+		{"finding_list", "summary", 400, 140},
+		{"recent_facts", "summary", 900, 150},
+		{"recent_done_intents", "summary", 500, 120},
+		{"hints", "text", 200, 100},
+		{"cold_digests", "body", 300, 150},
+	} {
+		if boundOverviewEntries(out[section.name], section.field, section.budget, section.perItem) {
+			truncated = true
+		}
+	}
+	if boundRelatedOverview(out["related_tasks"]) {
+		truncated = true
+	}
+	if truncated {
+		out["summary_truncated"] = true
+		out["overview_note"] = "概览摘要受上下文预算限制；按 id 用 node_detail/list_facts/list_goals/expand_digest 读取完整内容。"
+	}
+}
+
+func boundOverviewEntries(value any, field string, allowance, perItem int) bool {
+	entries, ok := value.([]map[string]any)
+	if !ok || len(entries) == 0 {
+		return false
+	}
+	if fair := allowance / len(entries); fair < perItem {
+		perItem = fair
+	}
+	budget := overviewTextBudget{remaining: allowance}
+	for _, entry := range entries {
+		if text, ok := entry[field]; ok {
+			entry[field] = budget.take(text, perItem)
+		}
+	}
+	return budget.truncated
+}
+
+// A related task may carry several independently paged lists. Give each source
+// an equal share, then each list a share of that source, so no single long task
+// description or digest can consume the whole inherited-context allowance.
+func boundRelatedOverview(value any) bool {
+	sources, ok := value.([]map[string]any)
+	if !ok || len(sources) == 0 {
+		return false
+	}
+	const totalTextRunes = 3000
+	perSource := totalTextRunes / len(sources)
+	truncated := false
+	for _, source := range sources {
+		changed := false
+		if task, ok := source["task"].(map[string]any); ok {
+			budget := overviewTextBudget{remaining: perSource * 25 / 100}
+			task["goal"] = budget.take(task["goal"], perSource*15/100)
+			task["description"] = budget.take(task["description"], perSource*10/100)
+			changed = budget.truncated
+		}
+		for _, section := range []struct {
+			name, field string
+			percent     int
+		}{
+			{"goals", "text", 10},
+			{"hints", "text", 5},
+			{"recent_facts", "summary", 20},
+			{"recent_findings", "summary", 10},
+			{"recent_intent_results", "summary", 7},
+			{"recent_intent_results", "result_summary", 8},
+			{"cold_digests", "body", 10},
+			{"asset_scope", "source", 5},
+		} {
+			allowance := perSource * section.percent / 100
+			if boundOverviewEntries(source[section.name], section.field, allowance, allowance) {
+				changed = true
+			}
+		}
+		if changed {
+			source["summary_truncated"] = true
+			truncated = true
+		}
+	}
+	return truncated
+}
+
 func obj(props map[string]any, required ...string) map[string]any {
 	m := map[string]any{"type": "object", "properties": props}
 	if len(required) > 0 {
@@ -548,6 +649,7 @@ func (t *ToolSet) graphOverviewData() map[string]any {
 			}
 		}
 	}
+	boundGraphOverview(out)
 	return out
 }
 
@@ -560,13 +662,13 @@ func inheritedMap(m map[string]any, sourceTaskID int64) map[string]any {
 const (
 	relatedOverviewTotalTextRunes      = 48_000
 	relatedOverviewMaxTextPerSource    = 8_000
-	relatedOverviewMaxGoalsPerSource   = 8
-	relatedOverviewMaxHintsPerSource   = 6
-	relatedOverviewMaxFactsPerSource   = 12
-	relatedOverviewMaxFindingsPerTask  = 6
-	relatedOverviewMaxIntentsPerTask   = 8
-	relatedOverviewMaxScopePerSource   = 12
-	relatedOverviewMaxDigestsPerSource = 6
+	relatedOverviewMaxGoalsPerSource   = 4
+	relatedOverviewMaxHintsPerSource   = 2
+	relatedOverviewMaxFactsPerSource   = 5
+	relatedOverviewMaxFindingsPerTask  = 3
+	relatedOverviewMaxIntentsPerTask   = 4
+	relatedOverviewMaxScopePerSource   = 4
+	relatedOverviewMaxDigestsPerSource = 3
 )
 
 // overviewTextBudget bounds inherited prompt text while preserving a fair slice
@@ -1051,6 +1153,22 @@ func (t *ToolSet) addOneIntent(it intentItem) (int64, error) {
 	anchors := pidList(it.AssetIDs)
 	// 资产拦截：意图绑定的资产若命中系统资产拦截规则，则禁止下发该意图。
 	if t.as != nil && len(anchors) > 0 {
+		// Validate asset ids before writing the intent. Exploration node ids and
+		// asset ids are separate namespaces; a model can confuse them and the
+		// foreign-key error from AddIntent does not explain how to recover.
+		assets, err := t.as.GetByIDs(anchors)
+		if err != nil {
+			return 0, fmt.Errorf("资产 ID 校验失败：%w", err)
+		}
+		found := make(map[int64]bool, len(assets))
+		for _, asset := range assets {
+			found[asset.ID] = true
+		}
+		for _, id := range anchors {
+			if !found[id] {
+				return 0, fmt.Errorf("asset_id %d 不存在：asset_ids 必须使用 list_assets 返回的资产 id，不能使用 graph_overview/node_detail 的探索节点 id", id)
+			}
+		}
 		hits, err := t.as.CheckAssetsIntercept(t.taskID, anchors)
 		if err != nil {
 			return 0, fmt.Errorf("资产拦截校验失败：%w", err)
@@ -1140,6 +1258,10 @@ func (t *ToolSet) addIntent() actool.CoreTool {
 			out := map[string]any{"ids": ids}
 			if len(errs) > 0 {
 				out["errors"] = errs
+			}
+			if !createdAny {
+				b, _ := json.Marshal(out)
+				return actool.Errorf(string(b)), nil
 			}
 			return jsonResult(out)
 		})
@@ -1252,6 +1374,43 @@ func (t *ToolSet) addFinding() actool.CoreTool {
 		refs, err := t.findingRefsFromHint(pid(a.EvidenceHintID), a.TrafficRefs)
 		if err != nil {
 			return actool.Errorf(err.Error()), nil
+		}
+		// A planner can read earlier work but does not itself verify a newly
+		// proposed intent. Requiring a persisted fact from that intent (or a
+		// separately verified traffic handoff) prevents it from turning an
+		// imagined HTTP exchange into a finding before the Worker has run.
+		if t.worker == "planner" && len(refs) == 0 {
+			var facts []*db.Node
+			if intentID := pid(a.IntentID); intentID > 0 {
+				ids, queryErr := t.ts.FactsYielded(intentID)
+				if queryErr != nil {
+					return actool.Errorf("Planner 查询意图事实失败: " + queryErr.Error()), nil
+				}
+				for _, id := range ids {
+					fact, queryErr := t.ts.GetNode(id)
+					if queryErr != nil {
+						return actool.Errorf("Planner 查询事实失败: " + queryErr.Error()), nil
+					}
+					if fact != nil {
+						facts = append(facts, fact)
+					}
+				}
+			} else {
+				facts, err = t.ts.ListByKind(db.KindFact, 1000)
+				if err != nil {
+					return actool.Errorf("Planner 查询事实失败: " + err.Error()), nil
+				}
+			}
+			confirmed := false
+			for _, fact := range facts {
+				if fact.Kind == db.KindFact && fact.State == "confirmed" {
+					confirmed = true
+					break
+				}
+			}
+			if !confirmed {
+				return actool.Errorf("Planner 不能仅凭推测的请求或响应报告漏洞：当前意图尚无已确认事实或已核实的流量证据。请等待 Worker 验证后由 Worker 报告，或提供本任务核实过的 evidence_hint_id/traffic_refs。"), nil
+			}
 		}
 		input := db.RecordFindingInput{TaskID: t.taskID, ExplorationID: t.ts.ID(), IntentID: pid(a.IntentID), VulnClass: a.VulnClass, Name: a.Name, Severity: a.Severity, Summary: a.Summary, Evidence: a.Evidence, Worker: t.worker, AssetIDs: pidList(a.AssetIDs)}
 		var recorded *db.RecordedFinding

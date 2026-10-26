@@ -1,4 +1,8 @@
 .git
+.aws
+.codex
+.agents
+.claude
 **/node_modules
 **/__pycache__
 web/.next
@@ -15,6 +19,10 @@ work
 test-results
 scan-output
 evidence-local
+presentation-output
+docs/evidence
+docs/legacy-assessments
+screenshots
 .local-runtime
 release-artifacts
 *.dump

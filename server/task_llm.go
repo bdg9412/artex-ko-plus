@@ -221,6 +221,13 @@ func (r *taskLLMRuntime) streamHooks() taskLLMStreamHooks {
 
 func (r *taskLLMRuntime) Stream(ctx context.Context, req llm.CompletionRequest) iter.Seq2[llm.StreamEvent, error] {
 	ctx = llmrec.WithTaskID(ctx, r.taskID)
+	if cfg, ok := r.activeCfg(); ok {
+		if err := checkOllamaContextBudget(cfg, req); err != nil {
+			return func(yield func(llm.StreamEvent, error) bool) {
+				yield(llm.StreamEvent{}, &taskLLMError{taskID: r.taskID, cause: err})
+			}
+		}
+	}
 	return streamTaskLLM(ctx, r.taskID, req, r.streamHooks())
 }
 
@@ -231,6 +238,11 @@ func (r *taskLLMRuntime) Stream(ctx context.Context, req llm.CompletionRequest) 
 // streaming path needs is unnecessary here).
 func (r *taskLLMRuntime) Complete(ctx context.Context, req llm.CompletionRequest) (llm.Message, string, llm.Usage, error) {
 	ctx = llmrec.WithTaskID(ctx, r.taskID)
+	if cfg, ok := r.activeCfg(); ok {
+		if err := checkOllamaContextBudget(cfg, req); err != nil {
+			return llm.Message{}, "", llm.Usage{}, &taskLLMError{taskID: r.taskID, cause: err}
+		}
+	}
 	return completeTaskLLM(ctx, r.taskID, req, r.streamHooks())
 }
 
@@ -437,7 +449,8 @@ func isRetryableStreamError(err error) bool {
 	}
 	s := strings.ToLower(err.Error())
 	if strings.Contains(s, "too long") || strings.Contains(s, "context length") ||
-		strings.Contains(s, "context_length") || strings.Contains(s, "maximum context") ||
+		strings.Contains(s, "context_length") || strings.Contains(s, "context window") ||
+		strings.Contains(s, "context mismatch") || strings.Contains(s, "maximum context") ||
 		strings.Contains(s, "status 413") {
 		return false
 	}

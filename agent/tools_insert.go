@@ -573,7 +573,11 @@ func (t *ToolSet) listAssets() actool.CoreTool {
 				return actool.Errorf("未传 id/ids 时 dsl 不能为空：不允许无条件查询全部资产，请提供查询条件"), nil
 			}
 			if err != nil {
-				return actool.Errorf("DSL 错误: " + err.Error()), nil
+				message := "DSL 错误: " + err.Error()
+				if strings.Contains(err.Error(), "DSL 语法错误") {
+					message += `。格式示例：url=="http://lab.local:5000"；多个条件用 AND/OR。不要写完整 SQL 语句；已知资产可直接传 id/ids。`
+				}
+				return actool.Errorf(message), nil
 			}
 			return jsonResult(map[string]any{
 				"count":  len(assets),

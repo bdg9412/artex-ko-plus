@@ -307,7 +307,7 @@ const plannerDefaultTmpl = `你是一个网络安全平台授权渗透测试系�
 
 **每次唤醒的决策流程**：
 
-1. **完整态势已附在本提示下方**（就是 graph_overview 的返回，无需再调它）：task（原始标题+目标/根节点）、资产计数、goals+状态、open/running/recent_done 意图、sites_without_endpoints（无端点的站点，提示可能待探的方向）、facts（探索事实数，与漏洞是两类）、recent_facts（{id,summary,confidence?}）。
+1. **态势索引已附在本提示下方**（就是 graph_overview 的摘要；带 summary_truncated 时按 id 调 node_detail/list_goals/list_facts 取完整内容）：task（原始标题+目标/根节点）、资产计数、goals+状态、open/running/recent_done 意图、sites_without_endpoints（无端点的站点，提示可能待探的方向）、facts（探索事实数，与漏洞是两类）、recent_facts（{id,summary,confidence?}）。
    - **范围**：探索节点（goals/意图/facts/findings）只含本任务；**资产图全局共享**（多任务同一份，资产计数是全局在范围内的、非本任务独有）——出现非本任务相关的资产时忽略。
    - **血缘**：每个意图带 parents（上游：派生自哪些事实/意图）和 yields（下游：产生了哪些事实/发现），recent_facts 每条带 from_intent；据此理解"哪些事实来自哪个方向、能否综合出新方向"。
    - **否定/存疑观察**（recent_facts 里"端口关闭/不可注入"等）是 worker 的观察、不是定论：采信前先 node_detail(id) 看 evidence——evidence 扎实、confidence=observed 且手段已穷尽的才视为该方向暂时封住；evidence 缺失、只是"看起来像/只探一次"、或 confidence=inferred 的，按【尚未探明】处理，若在范围内且无其它意图覆盖，默认派一条复核意图去证实或推翻（**同一否定方向至多复核一次**；复核后仍为否定、且证据合理，就尊重该结论、不再派）。
@@ -406,6 +406,9 @@ func (p *Planner) Plan(ctx context.Context, taskID int64, as *db.AssetStore, ts 
 	taskDir := ensureRunDir(p.workDir, taskID, 0)
 	ctx = intercept.WithReviewContext(ctx, taskDir, intercept.ReviewBackground{})
 	sysBody := plannerSystem(goal, p.workDir, taskDir)
+	// Keep the current tool contract visible even when a DB-stored planner prompt
+	// still describes list_assets with the retired q parameter.
+	sysBody += "\n\n【资产工具参数】list_assets 按 URL 查询时用 dsl，例如 url==\"http://lab.local:5000\"；不要用旧的 q 参数或 SQL 语句。add_intent.asset_ids 只能填 list_assets 返回的 assets[].id（或现有意图明确给出的 asset_ids），不能填 graph_overview/node_detail 的节点 id。尚未确认资产 id 时先查询，不要猜数字。"
 	if p.wantConstraints() {
 		sysBody += constraintBlock(ts) // 操作约束(若有)注入系统提示,框定探索边界
 	}
@@ -421,16 +424,17 @@ func (p *Planner) Plan(ctx context.Context, taskID int64, as *db.AssetStore, ts 
 		settle = wrapupSettlementForTask("planner", nil, clamped)
 	}
 	opts := agentcore.Options{
-		Provider:        p.prov,
-		SystemPrompt:    system,
-		DynamicBoundary: boundary,
-		Tools:           tools,
-		DeferredTools:   def.Deferred,
-		UnlockSet:       def.Unlock,
-		PermissionMode:  permission.ModeBypass,
-		EnableWebFetch:  diagnosticGuard == nil, // 走记录代理留痕；载入代理 CA 验证 MITM 重签的 HTTPS 证书
-		WebFetchProxy:   p.proxyAddr,
-		WebFetchCACert:  p.proxyCACert,
+		Provider:               p.prov,
+		SystemPrompt:           system,
+		DynamicBoundary:        boundary,
+		Tools:                  tools,
+		DeferredTools:          def.Deferred,
+		UnlockSet:              def.Unlock,
+		PermissionMode:         permission.ModeBypass,
+		DisableBackgroundTasks: diagnosticGuard != nil,
+		EnableWebFetch:         diagnosticGuard == nil, // 走记录代理留痕；载入代理 CA 验证 MITM 重签的 HTTPS 证书
+		WebFetchProxy:          p.proxyAddr,
+		WebFetchCACert:         p.proxyCACert,
 		// 联网搜索(可选)。ddgs 无需 key；brave-free 需 BraveKey；tavily 需 TavilyKey。
 		// WebSearchProxy 是独立出口代理(http/https/socks5)，与记录流量的 MITM 代理无关；空则直连。
 		EnableWebSearch:       diagnosticGuard == nil && p.webSearch.Enabled,

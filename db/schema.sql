@@ -362,10 +362,12 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS llm_profiles (
     id               BIGSERIAL PRIMARY KEY,
     name             TEXT NOT NULL UNIQUE,
-    format           TEXT NOT NULL CHECK (format IN ('openai','anthropic','openai-responses')),
+    format           TEXT NOT NULL CHECK (format IN ('openai','anthropic','openai-responses','ollama','bedrock','bedrock-converse','bedrock-marketplace')),
     base_url         TEXT,
     proxy            TEXT,
     model            TEXT NOT NULL,
+    invoke_schema    TEXT NOT NULL DEFAULT '' CHECK (invoke_schema IN ('','tgi','deepseek')),
+    prompt_style     TEXT NOT NULL DEFAULT '' CHECK (prompt_style IN ('','raw','deepseek','qwen','llama')),
     api_key          TEXT,
     api_key_hint     TEXT,
     rate_per_second  DOUBLE PRECISION NOT NULL DEFAULT 0,
@@ -375,6 +377,10 @@ CREATE TABLE IF NOT EXISTS llm_profiles (
     -- reasoning_effort=思考强度(''/low/medium/high/xhigh/max)，互不牵连。
     reasoning_effort TEXT NOT NULL DEFAULT '',
     thinking_type    TEXT NOT NULL DEFAULT '',
+    -- OpenAI Responses API access_programs.cyber; empty = omit the request field.
+    cyber_access_program TEXT NOT NULL DEFAULT ''
+        CHECK (cyber_access_program IN ('','standard','daybreak_blue','daybreak_red')
+           AND (cyber_access_program = '' OR format = 'openai-responses')),
     is_default       BOOLEAN NOT NULL DEFAULT false,
     -- 轮询(故障转移)参数，见 docs/LLM轮询设计.md：
     --   priority     顺位，越大越先被选中；激活配置(is_default)永远排链首，与本值无关。
@@ -415,11 +421,23 @@ ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS priority     INTEGER NOT NULL 
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS pool_exclude BOOLEAN NOT NULL DEFAULT false;
 -- 流式开关；补旧库。默认 true = 保持既有的流式行为，旧配置无感升级。
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS streaming    BOOLEAN NOT NULL DEFAULT true;
--- 放开 format 约束以容纳 openai-responses(OpenAI Responses API)；补旧库。
--- 每次启动执行,幂等:先删旧 CHECK 再建含三值的新 CHECK。
+-- Keep the provider constraint current on existing databases as well as new ones.
+-- Ollama uses the OpenAI-compatible wire format without an API key.
 ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_format_check;
 ALTER TABLE llm_profiles ADD  CONSTRAINT llm_profiles_format_check
-    CHECK (format IN ('openai','anthropic','openai-responses'));
+    CHECK (format IN ('openai','anthropic','openai-responses','ollama','bedrock','bedrock-converse','bedrock-marketplace'));
+ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS invoke_schema TEXT NOT NULL DEFAULT '';
+ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS prompt_style TEXT NOT NULL DEFAULT '';
+ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_invoke_schema_check;
+ALTER TABLE llm_profiles ADD CONSTRAINT llm_profiles_invoke_schema_check CHECK (invoke_schema IN ('','tgi','deepseek'));
+ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_prompt_style_check;
+ALTER TABLE llm_profiles ADD CONSTRAINT llm_profiles_prompt_style_check CHECK (prompt_style IN ('','raw','deepseek','qwen','llama'));
+-- Existing profiles remain unchanged: empty means access_programs is omitted.
+ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS cyber_access_program TEXT NOT NULL DEFAULT '';
+ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_cyber_access_program_check;
+ALTER TABLE llm_profiles ADD CONSTRAINT llm_profiles_cyber_access_program_check
+    CHECK (cyber_access_program IN ('','standard','daybreak_blue','daybreak_red')
+       AND (cyber_access_program = '' OR format = 'openai-responses'));
 
 -- 输出上限及其字段名；补旧库。默认 0 / '' = 不发送上限、沿用 max_tokens 字段名，
 -- 旧配置行为完全不变。
@@ -1279,6 +1297,7 @@ CREATE TABLE IF NOT EXISTS task_intercept_rules (
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_task_intercept_task ON task_intercept_rules(task_id);
+
 -- 补旧库(本会话早前建过该表、无 action 列)：加列(带 IF NOT EXISTS)。
 ALTER TABLE task_intercept_rules ADD COLUMN IF NOT EXISTS action TEXT NOT NULL DEFAULT 'block';
 DROP TRIGGER IF EXISTS trg_task_intercept_rules_upd ON task_intercept_rules;

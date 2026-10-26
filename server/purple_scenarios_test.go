@@ -67,7 +67,8 @@ func TestScenarioNormalizationRejectsUnsupportedClaimsAndSPLWrites(t *testing.T)
 		"index=security | collect index=other", "index=security [ search index=other ]", "index=security `unsafe_macro`",
 		"index=* | stats count", "index=other | stats count", "index=security | map search=bad",
 		"index=security OR index=* | stats count", "index=security | search index=*",
-		"index=security OR sourcetype=* | stats count",
+		"index=security OR sourcetype=* | stats count", "index=<index> OR sourcetype=* | stats count",
+		"index=<index> OR (status=401) | stats count", "index=<index> OR index=<index> | stats count",
 	} {
 		if scenarioReadOnlySPL(bad) {
 			t.Errorf("write/unbounded SPL accepted: %q", bad)
@@ -75,6 +76,16 @@ func TestScenarioNormalizationRejectsUnsupportedClaimsAndSPLWrites(t *testing.T)
 	}
 	if !scenarioReadOnlySPL("search index=<index> sourcetype=<sourcetype> | stats count by uri_path") {
 		t.Fatal("bounded read-only SPL was rejected")
+	}
+	for _, query := range []string{
+		"index=<index> (status=401 OR status=403) | stats count by uri_path",
+		"index=<index> NOT status=200 | stats count by uri_path",
+		"index=<index> | where (status=401 OR status=403) | stats count by uri_path",
+		`index=<index> message="index=not-an-index" | stats count`,
+	} {
+		if !scenarioReadOnlySPL(query) {
+			t.Errorf("scoped read-only SPL condition was rejected: %q", query)
+		}
 	}
 	if scenarioReadOnlySPL(`search index="security" sourcetype=app:audit | stats count`) {
 		t.Fatal("specific index was accepted without a verified mapping")
@@ -98,6 +109,10 @@ func TestScenarioOmitsConnectionCandidates(t *testing.T) {
 	query, changed := scenarioIndexPlaceholder("index=ag_juice_shop | stats count")
 	if !changed || query != "index=<index> | stats count" {
 		t.Fatalf("unverified index was not replaced with placeholder: %q", query)
+	}
+	query, changed = scenarioIndexPlaceholder(`index=ag_juice_shop message="index=literal" | stats count`)
+	if !changed || query != `index=<index> message="index=literal" | stats count` {
+		t.Fatalf("quoted search text was mistaken for another index: %q", query)
 	}
 	var draft db.DefenseScenario
 	if err := json.Unmarshal([]byte(scenarioModelFixture), &draft); err != nil {
@@ -337,5 +352,63 @@ func TestScenarioGenerateAPIClassifiesModelFailure(t *testing.T) {
 	current := request("GET", path, "")
 	if current.Code != http.StatusOK || !strings.Contains(current.Body.String(), `"scenario":null`) {
 		t.Fatalf("failed model call saved a draft: %d %s", current.Code, current.Body.String())
+	}
+}
+
+func TestScenarioGenerateRetriesRejectedSPLAndSavesOnlySafeDraft(t *testing.T) {
+	s, id, request := purpleAPIFixture(t)
+	s.llmOn = true
+	bad := strings.Replace(scenarioModelFixture,
+		"index=<index> | stats count by uri_path, status",
+		"index=<index> OR index=* | stats count", 1)
+	var calls atomic.Int32
+	s.llmProv = retestProvider{complete: func(_ context.Context, req llm.CompletionRequest) (llm.Message, string, llm.Usage, error) {
+		attempt := calls.Add(1)
+		if len(req.System) != 1 || req.MaxTokens != scenarioMaxOutputTokens || len(req.Messages) != 1 {
+			t.Errorf("retry changed bounded scenario request: %+v", req)
+		}
+		if attempt == 1 {
+			if strings.Contains(req.System[0], scenarioRetryPrompt) {
+				t.Error("initial request included retry instructions")
+			}
+			return llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{llm.TextBlock(bad)}}, "end_turn", llm.Usage{}, nil
+		}
+		if !strings.Contains(req.System[0], scenarioRetryPrompt) || strings.Contains(req.System[0], "index=*") {
+			t.Error("retry lacked corrective instructions or echoed rejected output")
+		}
+		return llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{llm.TextBlock(scenarioModelFixture)}}, "end_turn", llm.Usage{}, nil
+	}}
+	path := fmt.Sprintf("/api/exploration/findings/%d/defense", id)
+	response := request("POST", path+"/scenario/generate", "")
+	if response.Code != http.StatusOK || calls.Load() != 2 {
+		t.Fatalf("scenario retry did not recover: status=%d calls=%d body=%s", response.Code, calls.Load(), response.Body.String())
+	}
+	var defense db.FindingDefense
+	if err := json.Unmarshal(response.Body.Bytes(), &defense); err != nil || defense.Scenario == nil ||
+		defense.Scenario.State != "current" || len(defense.Scenario.Stages) != 1 ||
+		defense.Scenario.Stages[0].RuleDraft.Query != "index=<index> | stats count by uri_path, status" {
+		t.Fatalf("rejected SPL was saved or safe draft was lost: %+v %v", defense.Scenario, err)
+	}
+}
+
+func TestScenarioGenerateStopsAfterTwoRejectedDrafts(t *testing.T) {
+	s, id, request := purpleAPIFixture(t)
+	s.llmOn = true
+	bad := strings.Replace(scenarioModelFixture,
+		"index=<index> | stats count by uri_path, status",
+		"index=<index> | outputlookup results.csv", 1)
+	var calls atomic.Int32
+	s.llmProv = retestProvider{complete: func(_ context.Context, _ llm.CompletionRequest) (llm.Message, string, llm.Usage, error) {
+		calls.Add(1)
+		return llm.Message{Role: llm.RoleAssistant, Content: []llm.ContentBlock{llm.TextBlock(bad)}}, "end_turn", llm.Usage{}, nil
+	}}
+	path := fmt.Sprintf("/api/exploration/findings/%d/defense", id)
+	response := request("POST", path+"/scenario/generate", "")
+	if response.Code != http.StatusBadGateway || calls.Load() != 2 || strings.Contains(response.Body.String(), "outputlookup") {
+		t.Fatalf("invalid SPL retry was unbounded or leaked: status=%d calls=%d body=%s", response.Code, calls.Load(), response.Body.String())
+	}
+	current := request("GET", path, "")
+	if current.Code != http.StatusOK || !strings.Contains(current.Body.String(), `"scenario":null`) {
+		t.Fatalf("rejected scenario was saved: %d %s", current.Code, current.Body.String())
 	}
 }

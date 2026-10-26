@@ -22,6 +22,10 @@ services:
       context: .
       dockerfile: Dockerfile.local
     init: true
+    # Allows the container to reach Ollama running on the host, including on
+    # Linux engines that do not provide host.docker.internal automatically.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy

@@ -223,7 +223,8 @@ func (p *dslParser) parseAtom() (*astNode, error) {
 // Syntax:
 //
 //	field=value      fuzzy match (ILIKE '%value%')
-//	field==value     exact match
+//	field == 'value' exact match (spaces and single/double quotes are optional)
+//	field ILIKE '%value%' and field contains 'value' map to fuzzy match
 //	field!=value     exclude fuzzy
 //	port>8080        numeric comparison
 //	bare word        full-text fuzzy across all main text fields
@@ -412,6 +413,9 @@ func tryParseFieldExpr(s string, pos int) (Expr, int, bool) {
 	if !isKnownField(field) {
 		return Expr{}, pos, false
 	}
+	for i < len(s) && unicode.IsSpace(rune(s[i])) {
+		i++
+	}
 	if i >= len(s) {
 		return Expr{}, pos, false
 	}
@@ -424,7 +428,25 @@ func tryParseFieldExpr(s string, pos int) (Expr, int, bool) {
 		op = string(s[i])
 		i++
 	default:
-		return Expr{}, pos, false
+		end := i
+		for end < len(s) && isIdentChar(s[end]) {
+			end++
+		}
+		word := strings.ToUpper(s[i:end])
+		if (word != "ILIKE" && word != "CONTAINS") || end == i ||
+			(end < len(s) && !unicode.IsSpace(rune(s[end]))) {
+			return Expr{}, pos, false
+		}
+		_, stringField := knownStringFields[field]
+		_, arrayField := knownArrayFields[field]
+		if !stringField && !arrayField {
+			return Expr{}, pos, false
+		}
+		op = "=" // reuse the existing parameter-bound fuzzy match
+		i = end
+	}
+	for i < len(s) && unicode.IsSpace(rune(s[i])) {
+		i++
 	}
 	value, end := readToken(s, i)
 	if end == i {
@@ -433,21 +455,26 @@ func tryParseFieldExpr(s string, pos int) (Expr, int, bool) {
 	return Expr{Field: field, Op: op, Value: value}, end, true
 }
 
-// readToken reads a quoted or unquoted token starting at pos.
+// readToken reads a quoted or unquoted token starting at pos. Quoted values may
+// contain spaces and parentheses; doubled quotes represent a literal quote.
 func readToken(s string, pos int) (string, int) {
 	if pos >= len(s) {
 		return "", pos
 	}
-	if s[pos] == '"' {
-		i := pos + 1
-		for i < len(s) && s[i] != '"' {
-			i++
+	if quote := s[pos]; quote == '"' || quote == '\'' {
+		var value strings.Builder
+		for i := pos + 1; i < len(s); i++ {
+			if s[i] == quote {
+				if i+1 < len(s) && s[i+1] == quote {
+					value.WriteByte(quote)
+					i++
+					continue
+				}
+				return value.String(), i + 1
+			}
+			value.WriteByte(s[i])
 		}
-		val := s[pos+1 : i]
-		if i < len(s) {
-			i++
-		}
-		return val, i
+		return value.String(), len(s)
 	}
 	i := pos
 	for i < len(s) && !unicode.IsSpace(rune(s[i])) && s[i] != '(' && s[i] != ')' {

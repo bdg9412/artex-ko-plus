@@ -453,6 +453,15 @@ func TestTaskLLMRuntimeErrorSkipsWorkerReplay(t *testing.T) {
 	if !retryableWorkerModelError(harness.ReasonModelError, errors.New("temporary network error")) {
 		t.Fatal("ordinary model errors should retain the existing worker retry behavior")
 	}
+	for _, message := range []string{
+		"ollama: status 400: the request exceeds the available context length",
+		"ollama: HTTP status 400: invalid request",
+		"ollama context mismatch: configured 32000, loaded 4096",
+	} {
+		if retryableWorkerModelError(harness.ReasonModelError, errors.New(message)) {
+			t.Fatalf("deterministic model error must not replay the intent: %s", message)
+		}
+	}
 }
 
 // A transient pre-commit stream failure (200-then-drop / overloaded / 5xx) is

@@ -28,6 +28,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import { type CyberAccessProgram, daybreakEditorState, daybreakRequestProgram } from "@/lib/daybreak-profile";
 import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -38,6 +39,61 @@ import { ProfileRetryFields, RetryPolicyPanel, ZERO_OVERRIDE } from "./_componen
 // 存库空字符串 = 该字段【不发送】；Radix Select 不接受空 value，故 UI 用 "none"
 // 哨兵表示不发送，存取时与 "" 互转（NONE / fromStore / toStore）。
 const NONE = "none";
+const OLLAMA_DOCKER_URL = "http://host.docker.internal:11434/v1";
+const BEDROCK_BASE_URL_EXAMPLE = "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic";
+const BEDROCK_CONVERSE_BASE_URL_EXAMPLE = "https://bedrock-runtime.ap-northeast-2.amazonaws.com";
+const MARKETPLACE_BASE_URL_EXAMPLE = "https://bedrock-runtime.us-east-1.amazonaws.com";
+const MARKETPLACE_ARN = /^arn:aws:sagemaker:([a-z0-9-]+):\d{12}:endpoint\/[A-Za-z0-9-]+$/;
+const marketplaceRegionFromARN = (arn: string) => MARKETPLACE_ARN.exec(arn.trim())?.[1] ?? "";
+const marketplaceBaseURLFromARN = (arn: string) => {
+  const region = marketplaceRegionFromARN(arn);
+  return region ? `https://bedrock-runtime.${region}.amazonaws.com` : "";
+};
+const MODEL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
+  anthropic: "claude-opus-4-8",
+  openai: "claude-opus-4-8",
+  "openai-responses": "claude-opus-4-8",
+  ollama: "예: llama3.2",
+  bedrock: "us.anthropic.claude-sonnet-4-6",
+  "bedrock-converse": "예: zai.glm-4.7 또는 사용 중인 Bedrock 모델 ID",
+  "bedrock-marketplace": "arn:aws:sagemaker:us-east-1:123456789012:endpoint/my-model",
+};
+const BASE_URL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
+  anthropic: "https://api.openai.com/v1",
+  openai: "https://api.openai.com/v1",
+  "openai-responses": "https://api.openai.com/v1",
+  ollama: OLLAMA_DOCKER_URL,
+  bedrock: BEDROCK_BASE_URL_EXAMPLE,
+  "bedrock-converse": BEDROCK_CONVERSE_BASE_URL_EXAMPLE,
+  "bedrock-marketplace": MARKETPLACE_BASE_URL_EXAMPLE,
+};
+const BASE_URL_LABEL_KEYS = {
+  anthropic: "profile.baseUrl.label",
+  openai: "profile.baseUrl.label",
+  "openai-responses": "profile.baseUrl.label",
+  ollama: "profile.baseUrl.label",
+  bedrock: "profile.baseUrl.bedrockLabel",
+  "bedrock-converse": "profile.baseUrl.converseLabel",
+  "bedrock-marketplace": "profile.baseUrl.marketplaceLabel",
+} as const;
+const MAX_TOKENS_HINT_KEYS = {
+  anthropic: "profile.maxTokens.hint",
+  openai: "profile.maxTokens.hint",
+  "openai-responses": "profile.maxTokens.hint",
+  ollama: "profile.maxTokens.hint",
+  bedrock: "profile.maxTokens.bedrockHint",
+  "bedrock-converse": "profile.maxTokens.converseHint",
+  "bedrock-marketplace": "profile.maxTokens.marketplaceHint",
+} as const;
+const RATE_HINT_KEYS = {
+  anthropic: "profile.rateHint",
+  openai: "profile.rateHint",
+  "openai-responses": "profile.rateHint",
+  ollama: "profile.rateHintOllama",
+  bedrock: "profile.rateHint",
+  "bedrock-converse": "profile.rateHint",
+  "bedrock-marketplace": "profile.rateHintMarketplace",
+} as const;
 const fromStore = (v?: string) => (v ? v : NONE);
 const toStore = (v: string) => (v === NONE ? "" : v);
 
@@ -260,7 +316,7 @@ function ProfileSheet({
   const t = useTranslations("llmPage");
   const isNew = !profile;
   const [name, setName] = React.useState("");
-  const [format, setFormat] = React.useState<"anthropic" | "openai" | "openai-responses">("anthropic");
+  const [format, setFormat] = React.useState<LLMProfile["format"]>("anthropic");
   const [model, setModel] = React.useState("");
   const [baseUrl, setBaseUrl] = React.useState("");
   const [proxy, setProxy] = React.useState("");
@@ -271,14 +327,19 @@ function ProfileSheet({
   const [cw, setCw] = React.useState("0"); // 上下文窗口(K tokens);0=默认200K
   const [thinkingType, setThinkingType] = React.useState(NONE);
   const [effort, setEffort] = React.useState(NONE);
+  const [daybreakEnabled, setDaybreakEnabled] = React.useState(false);
+  const [cyberProgram, setCyberProgram] = React.useState<CyberAccessProgram>("daybreak_blue");
   const [priority, setPriority] = React.useState("0"); // 轮询顺位;越大越先
   const [poolExclude, setPoolExclude] = React.useState(false);
   const [streaming, setStreaming] = React.useState(true); // true=流式(默认);false=非流式
   const [maxTokens, setMaxTokens] = React.useState("0"); // 单次回复输出上限;0=不发送
   const [maxTokensField, setMaxTokensField] = React.useState(NONE); // 上限用哪个字段名;NONE=max_tokens
+  const [invokeSchema, setInvokeSchema] = React.useState<"tgi" | "deepseek">("tgi");
+  const [promptStyle, setPromptStyle] = React.useState<"raw" | "deepseek" | "qwen" | "llama">("raw");
   const [sessionHeaderKey, setSessionHeaderKey] = React.useState(""); // 自定义会话头名;空=不发送
   const [retry, setRetry] = React.useState<LLMRetryOverride>(ZERO_OVERRIDE); // 本配置的重试覆盖;全 0=跟随全局
   const [testing, setTesting] = React.useState(false);
+  const [testError, setTestError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [models, setModels] = React.useState<string[]>([]);
   const [loadingModels, setLoadingModels] = React.useState(false);
@@ -308,7 +369,7 @@ function ProfileSheet({
   React.useEffect(() => {
     if (!open) return;
     setName(profile?.name ?? "");
-    setFormat(profile?.format === "openai" || profile?.format === "openai-responses" ? profile.format : "anthropic");
+    setFormat(profile?.format ?? "anthropic");
     setModel(profile?.model ?? "");
     setBaseUrl(profile?.base_url ?? "");
     setProxy(profile?.proxy ?? "");
@@ -317,20 +378,60 @@ function ProfileSheet({
     setCw(String(profile?.context_window_k ?? 0));
     setThinkingType(fromStore(profile?.thinking_type));
     setEffort(fromStore(profile?.reasoning_effort));
+    const daybreak = daybreakEditorState(profile?.format ?? "anthropic", profile?.cyber_access_program);
+    setDaybreakEnabled(daybreak.enabled);
+    setCyberProgram(daybreak.program);
     setPriority(String(profile?.priority ?? 0));
     setPoolExclude(profile?.pool_exclude ?? false);
-    setStreaming(profile?.streaming ?? true);
+    setStreaming(profile?.format === "bedrock-marketplace" || profile?.format === "bedrock-converse" ? false : (profile?.streaming ?? true));
     setMaxTokens(String(profile?.max_tokens ?? 0));
     setMaxTokensField(fromStore(profile?.max_tokens_field));
+    setInvokeSchema(profile?.invoke_schema ?? "tgi");
+    setPromptStyle(profile?.prompt_style ?? "raw");
     setSessionHeaderKey(profile?.session_header_key ?? "");
     setRetry(profile?.retry ?? ZERO_OVERRIDE);
     setApiKey("");
     setKeyHint(profile?.api_key_hint ?? "");
+    setTestError("");
     setModels([]);
     setModelsOpen(false);
   }, [open, profile]);
 
   const profileId = profile ? Number(profile.id) : undefined;
+  const marketplace = format === "bedrock-marketplace";
+  const converse = format === "bedrock-converse";
+  const singleResponse = marketplace || converse;
+  const apiKeyPlaceholder = format === "bedrock" || converse || marketplace ? t("profile.apiKey.bedrockPlaceholder") : "sk-…";
+
+  function changeFormat(next: LLMProfile["format"]) {
+    if (next === format) return;
+    setTestError("");
+    setFormat(next);
+    setModel("");
+    setBaseUrl(next === "ollama" ? OLLAMA_DOCKER_URL : "");
+    if (next === "bedrock-marketplace") setProxy("");
+    setApiKey("");
+    setKeyHint("");
+    setModels([]);
+    setModelsOpen(false);
+    setInvokeSchema("tgi");
+    setPromptStyle("raw");
+    setStreaming(next !== "bedrock-marketplace" && next !== "bedrock-converse");
+    if (next !== "openai-responses") setDaybreakEnabled(false);
+    if (next === "ollama") {
+      setCw("32");
+      setThinkingType(NONE);
+      setEffort(NONE);
+      setMaxTokensField(NONE);
+    } else if (next === "bedrock" || next === "bedrock-converse" || next === "bedrock-marketplace") {
+      setCw(next === "bedrock-marketplace" ? "32" : "0");
+      setThinkingType(NONE);
+      setEffort(NONE);
+      setMaxTokens("0");
+      setMaxTokensField(NONE);
+      setSessionHeaderKey("");
+    }
+  }
 
   async function loadModels() {
     if (loadingModels) return;
@@ -354,6 +455,19 @@ function ProfileSheet({
 
   async function testConnection() {
     if (testing) return;
+    setTestError("");
+    if (marketplace && (!MARKETPLACE_ARN.test(model.trim()) || !baseUrl.trim() || (!apiKey.trim() && !keyHint))) {
+      const error = t("profile.toast.marketplaceCredentialsRequired");
+      setTestError(error);
+      toast.error(error);
+      return;
+    }
+    if ((format === "bedrock" || converse) && (!baseUrl.trim() || (!apiKey.trim() && !keyHint) || (converse && !model.trim()))) {
+      const error = t(converse ? "profile.toast.converseCredentialsRequired" : "profile.toast.bedrockCredentialsRequired");
+      setTestError(error);
+      toast.error(error);
+      return;
+    }
     setTesting(true);
     try {
       // 用配置实际会跑的思考参数来测，这样不支持该字段的模型在这里就失败，
@@ -363,21 +477,31 @@ function ProfileSheet({
         model,
         baseUrl,
         apiKey,
-        proxy,
-        toStore(thinkingType),
-        toStore(effort),
+        marketplace ? "" : proxy,
+        format === "ollama" || singleResponse ? "" : toStore(thinkingType),
+        format === "ollama" || singleResponse ? "" : toStore(effort),
         profileId,
-        streaming,
-        sessionHeaderKey.trim(),
+        singleResponse ? false : streaming,
+        marketplace ? "" : sessionHeaderKey.trim(),
+        daybreakRequestProgram(format, daybreakEnabled, cyberProgram),
+        Math.max(0, Number(maxTokens) || 0),
+        marketplace ? invokeSchema : "",
+        marketplace ? promptStyle : "",
       );
       // 回复内容一并展示：看得见模型确实说了话，才算和会话里跑通是一回事。
       if (r.ok)
         toast.success(t("profile.toast.testOk", { latency: r.latency_ms ?? "?", model: r.model ?? model }), {
           description: r.reply ? t("profile.toast.testReply", { reply: r.reply }) : undefined,
         });
-      else toast.error(t("profile.toast.testFailed", { error: r.error ?? t("profile.toast.unknown") }));
+      else {
+        const error = t("profile.toast.testFailed", { error: r.error ?? t("profile.toast.unknown") });
+        setTestError(error);
+        toast.error(error);
+      }
     } catch (e) {
-      toast.error(t("profile.toast.testError", { msg: (e as Error).message }));
+      const error = t("profile.toast.testError", { msg: (e as Error).message });
+      setTestError(error);
+      toast.error(error);
     } finally {
       setTesting(false);
     }
@@ -386,6 +510,14 @@ function ProfileSheet({
   async function save() {
     if (!name.trim() || !model.trim()) {
       toast.error(t("profile.toast.nameModelRequired"));
+      return;
+    }
+    if ((format === "bedrock" || converse) && (!baseUrl.trim() || (!apiKey.trim() && !keyHint))) {
+      toast.error(t(converse ? "profile.toast.converseCredentialsRequired" : "profile.toast.bedrockCredentialsRequired"));
+      return;
+    }
+    if (marketplace && (!MARKETPLACE_ARN.test(model.trim()) || !baseUrl.trim() || (!apiKey.trim() && !keyHint))) {
+      toast.error(t("profile.toast.marketplaceCredentialsRequired"));
       return;
     }
     if (saving) return;
@@ -397,21 +529,23 @@ function ProfileSheet({
         format,
         model: model.trim(),
         base_url: baseUrl.trim(),
-        proxy: proxy.trim(),
+        proxy: marketplace ? "" : proxy.trim(),
         api_key: apiKey,
         rate_per_second: Number(rps) || 0,
         rate_per_minute: Number(rpm) || 0,
         context_window_k: Number(cw) || 0,
-        thinking_type: toStore(thinkingType),
-        reasoning_effort: toStore(effort),
+        thinking_type: format === "ollama" || singleResponse ? "" : toStore(thinkingType),
+        reasoning_effort: format === "ollama" || singleResponse ? "" : toStore(effort),
+        cyber_access_program: daybreakRequestProgram(format, daybreakEnabled, cyberProgram),
         priority: Number(priority) || 0,
         pool_exclude: poolExclude,
-        streaming,
+        streaming: singleResponse ? false : streaming,
         max_tokens: Math.max(0, Number(maxTokens) || 0),
         // 字段名开关只对 openai(Chat Completions) 有意义，其它格式一律回落到默认；
         // 后端也会再做一次同样的归一化，这里只是别让 UI 送出自相矛盾的值。
         max_tokens_field: format === "openai" ? toStore(maxTokensField) : "",
-        session_header_key: sessionHeaderKey.trim(),
+        ...(marketplace ? { invoke_schema: invokeSchema, prompt_style: promptStyle } : {}),
+        session_header_key: marketplace ? "" : sessionHeaderKey.trim(),
         retry,
       });
       if (isNew) toast.success(t("profile.toast.created", { name: name.trim() }));
@@ -456,7 +590,7 @@ function ProfileSheet({
             </div>
             <div className="grid gap-2">
               <Label>{t("profile.format.label")}</Label>
-              <Select value={format} onValueChange={(v) => setFormat(v as "anthropic" | "openai" | "openai-responses")}>
+              <Select value={format} onValueChange={(v) => changeFormat(v as LLMProfile["format"])}>
                 <SelectTrigger>
                   <SelectValue placeholder={t("profile.format.placeholder")} />
                 </SelectTrigger>
@@ -464,105 +598,223 @@ function ProfileSheet({
                   <SelectItem value="anthropic">Anthropic</SelectItem>
                   <SelectItem value="openai">OpenAI (Chat Completions)</SelectItem>
                   <SelectItem value="openai-responses">OpenAI (Responses API)</SelectItem>
+                  <SelectItem value="ollama">{t("profile.format.ollama")}</SelectItem>
+                  <SelectItem value="bedrock-converse">{t("profile.format.converse")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="p-model">{t("profile.model.label")}</Label>
+            <Label htmlFor="p-model">{t(marketplace ? "profile.model.marketplaceLabel" : "profile.model.label")}</Label>
             <div className="flex gap-2">
               <Input
                 id="p-model"
                 className="font-mono"
-                placeholder="claude-opus-4-8"
+                placeholder={MODEL_PLACEHOLDERS[format]}
                 value={model}
-                onChange={(e) => setModel(e.target.value)}
+                onChange={(e) => {
+                  const nextModel = e.target.value;
+                  setTestError("");
+                  if (marketplace) {
+                    const previousAutoURL = marketplaceBaseURLFromARN(model);
+                    const nextAutoURL = marketplaceBaseURLFromARN(nextModel);
+                    if (nextAutoURL && (!baseUrl.trim() || baseUrl === previousAutoURL)) setBaseUrl(nextAutoURL);
+                  }
+                  setModel(nextModel);
+                }}
               />
               {/* modal: 这个 Popover 的内容被 portal 到 <body>，在 Sheet 的滚动锁之外，
                   不加 modal 时列表能渲染却滚不动。modal 让它自己持有最上层滚动锁。 */}
-              <Popover open={modelsOpen} onOpenChange={setModelsOpen} modal>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="shrink-0"
-                    disabled={loadingModels}
-                    onClick={loadModels}
-                    title={t("profile.model.loadTitle")}
-                  >
-                    {loadingModels ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
-                  </Button>
-                </PopoverTrigger>
-                {models.length > 0 && (
-                  <PopoverContent className="max-h-72 w-72 gap-0 overflow-y-auto overscroll-contain p-1" align="end">
-                    {models.map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        className="w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
-                        onClick={() => {
-                          setModel(m);
-                          setModelsOpen(false);
-                        }}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </PopoverContent>
-                )}
-              </Popover>
+              {format !== "bedrock" && !converse && !marketplace && (
+                <Popover open={modelsOpen} onOpenChange={setModelsOpen} modal>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0"
+                      disabled={loadingModels}
+                      onClick={loadModels}
+                      title={t("profile.model.loadTitle")}
+                    >
+                      {loadingModels ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
+                    </Button>
+                  </PopoverTrigger>
+                  {models.length > 0 && (
+                    <PopoverContent className="max-h-72 w-72 gap-0 overflow-y-auto overscroll-contain p-1" align="end">
+                      {models.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          className="w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
+                          onClick={() => {
+                            setModel(m);
+                            setModelsOpen(false);
+                          }}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  )}
+                </Popover>
+              )}
             </div>
           </div>
 
+          {format === "ollama" && (
+            <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.ollamaHint")}</p>
+          )}
+          {format === "bedrock" && (
+            <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.bedrockHint")}</p>
+          )}
+          {converse && (
+            <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.converseHint")}</p>
+          )}
+          {marketplace && (
+            <div className="-mt-2 grid gap-1 text-muted-foreground text-xs">
+              <p>{t("profile.model.marketplaceHint")}</p>
+              {marketplaceRegionFromARN(model) && (
+                <p>{t("profile.marketplace.region", { region: marketplaceRegionFromARN(model) })}</p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-2">
-            <Label htmlFor="p-base-url">{t("profile.baseUrl.label")}</Label>
+            <Label htmlFor="p-base-url">{t(BASE_URL_LABEL_KEYS[format])}</Label>
             <Input
               id="p-base-url"
               className="font-mono"
-              placeholder="https://api.openai.com/v1"
+              placeholder={BASE_URL_PLACEHOLDERS[format]}
               value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
+              onChange={(e) => {
+                setBaseUrl(e.target.value);
+                setTestError("");
+              }}
             />
+            {format === "ollama" && <p className="text-muted-foreground text-xs">{t("profile.baseUrl.ollamaHint")}</p>}
+            {format === "bedrock" && (
+              <p className="text-muted-foreground text-xs">{t("profile.baseUrl.bedrockHint")}</p>
+            )}
+            {converse && <p className="text-muted-foreground text-xs">{t("profile.baseUrl.converseHint")}</p>}
+            {marketplace && <p className="text-muted-foreground text-xs">{t("profile.baseUrl.marketplaceHint")}</p>}
           </div>
 
-          <div className="grid gap-2">
-            <Label htmlFor="p-proxy">{t("profile.proxy.label")}</Label>
-            <Input
-              id="p-proxy"
-              className="font-mono"
-              placeholder="socks5://user:pass@127.0.0.1:1080 · http://127.0.0.1:8080"
-              value={proxy}
-              onChange={(e) => setProxy(e.target.value)}
-            />
-            <p className="text-muted-foreground text-xs">{t("profile.proxy.hint")}</p>
-          </div>
+          {!marketplace && (
+            <div className="grid gap-2">
+              <Label htmlFor="p-proxy">{t("profile.proxy.label")}</Label>
+              <Input
+                id="p-proxy"
+                className="font-mono"
+                placeholder="socks5://user:pass@127.0.0.1:1080 · http://127.0.0.1:8080"
+                value={proxy}
+                onChange={(e) => setProxy(e.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">{t("profile.proxy.hint")}</p>
+            </div>
+          )}
 
-          <div className="grid gap-2">
-            <Label htmlFor="p-session-header">{t("profile.sessionHeader.label")}</Label>
-            <Input
-              id="p-session-header"
-              className="font-mono"
-              placeholder={t("profile.sessionHeader.placeholder")}
-              value={sessionHeaderKey}
-              onChange={(e) => setSessionHeaderKey(e.target.value)}
-            />
-            <p className="text-muted-foreground text-xs">
-              {t.rich("profile.sessionHeader.hint", { b: (c) => <b>{c}</b> })}
-            </p>
-          </div>
+          {!marketplace && (
+            <div className="grid gap-2">
+              <Label htmlFor="p-session-header">{t("profile.sessionHeader.label")}</Label>
+              <Input
+                id="p-session-header"
+                className="font-mono"
+                placeholder={t("profile.sessionHeader.placeholder")}
+                value={sessionHeaderKey}
+                onChange={(e) => setSessionHeaderKey(e.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                {t.rich("profile.sessionHeader.hint", { b: (c) => <b>{c}</b> })}
+              </p>
+            </div>
+          )}
 
-          <div className="grid gap-2">
-            <Label htmlFor="p-api-key">API Key</Label>
-            <Input
-              id="p-api-key"
-              type="password"
-              placeholder={keyHint ? t("profile.apiKey.placeholderSet", { hint: keyHint }) : "sk-…"}
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-          </div>
+          {format !== "ollama" && (
+            <div className="grid gap-2">
+              <Label htmlFor="p-api-key">
+                {format === "bedrock" || converse || marketplace ? t("profile.apiKey.bedrockLabel") : "API Key"}
+              </Label>
+              <Input
+                id="p-api-key"
+                type="password"
+                placeholder={keyHint ? t("profile.apiKey.placeholderSet", { hint: keyHint }) : apiKeyPlaceholder}
+                value={apiKey}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setTestError("");
+                }}
+              />
+              {(format === "bedrock" || converse || marketplace) && (
+                <p className="text-muted-foreground text-xs">{t("profile.apiKey.bedrockHint")}</p>
+              )}
+            </div>
+          )}
+
+          {marketplace && (
+            <div className="grid gap-3 rounded-lg border p-3">
+              <p className="text-muted-foreground text-xs">{t("profile.marketplace.hint")}</p>
+              <div className="grid gap-2">
+                <Label>{t("profile.marketplace.schemaLabel")}</Label>
+                <Select value={invokeSchema} onValueChange={(value) => setInvokeSchema(value as typeof invokeSchema)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tgi">{t("profile.marketplace.schemaTgi")}</SelectItem>
+                    <SelectItem value="deepseek">{t("profile.marketplace.schemaDeepseek")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>{t("profile.marketplace.promptLabel")}</Label>
+                <Select value={promptStyle} onValueChange={(value) => setPromptStyle(value as typeof promptStyle)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="raw">{t("profile.marketplace.promptRaw")}</SelectItem>
+                    <SelectItem value="deepseek">{t("profile.marketplace.promptDeepseek")}</SelectItem>
+                    <SelectItem value="qwen">{t("profile.marketplace.promptQwen")}</SelectItem>
+                    <SelectItem value="llama">{t("profile.marketplace.promptLlama")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-muted-foreground text-xs">{t("profile.marketplace.testHint")}</p>
+            </div>
+          )}
+
+          {format === "openai-responses" && (
+            <div className="grid gap-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="grid gap-0.5">
+                  <Label className="text-sm">{t("profile.daybreak.enabled")}</Label>
+                  <p className="text-muted-foreground text-xs">{t("profile.daybreak.hint")}</p>
+                </div>
+                <Switch
+                  checked={daybreakEnabled}
+                  onCheckedChange={setDaybreakEnabled}
+                  aria-label={t("profile.daybreak.enabled")}
+                />
+              </div>
+              {daybreakEnabled && (
+                <div className="flex items-center justify-between gap-4 border-t pt-3">
+                  <Label className="text-sm">{t("profile.daybreak.program")}</Label>
+                  <Select value={cyberProgram} onValueChange={(v) => setCyberProgram(v as CyberAccessProgram)}>
+                    <SelectTrigger className="w-48 shrink-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daybreak_blue">Daybreak Blue</SelectItem>
+                      <SelectItem value="daybreak_red">Daybreak Red</SelectItem>
+                      <SelectItem value="standard">Standard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="grid gap-2">
@@ -582,11 +834,11 @@ function ProfileSheet({
                 max={1000}
                 value={cw}
                 onChange={(e) => setCw(e.target.value)}
-                placeholder="200"
+                placeholder={format === "ollama" || marketplace ? "32" : "200"}
               />
             </div>
           </div>
-          <p className="-mt-2 text-muted-foreground text-xs">{t("profile.rateHint")}</p>
+          <p className="-mt-2 text-muted-foreground text-xs">{t(RATE_HINT_KEYS[format])}</p>
 
           <div className="grid gap-3 rounded-lg border p-3">
             <div className="flex items-center justify-between gap-4">
@@ -614,9 +866,16 @@ function ProfileSheet({
             <div className="flex items-center justify-between gap-4 border-t pt-3">
               <div className="grid gap-0.5">
                 <Label className="text-sm">{t("profile.streaming.label")}</Label>
-                <p className="text-muted-foreground text-xs">{t("profile.streaming.hint")}</p>
+                <p className="text-muted-foreground text-xs">
+                  {t(marketplace ? "profile.streaming.marketplaceHint" : converse ? "profile.streaming.converseHint" : "profile.streaming.hint")}
+                </p>
               </div>
-              <Switch checked={streaming} onCheckedChange={setStreaming} aria-label={t("profile.streaming.aria")} />
+              <Switch
+                checked={singleResponse ? false : streaming}
+                onCheckedChange={setStreaming}
+                disabled={singleResponse}
+                aria-label={t("profile.streaming.aria")}
+              />
             </div>
           </div>
 
@@ -626,7 +885,7 @@ function ProfileSheet({
                 <Label htmlFor="p-max-tokens" className="text-sm">
                   {t("profile.maxTokens.label")}
                 </Label>
-                <p className="text-muted-foreground text-xs">{t("profile.maxTokens.hint")}</p>
+                <p className="text-muted-foreground text-xs">{t(MAX_TOKENS_HINT_KEYS[format])}</p>
               </div>
               <Input
                 id="p-max-tokens"
@@ -638,82 +897,93 @@ function ProfileSheet({
                 placeholder="0"
               />
             </div>
-            <div className="flex items-center justify-between gap-4 border-t pt-3">
-              <div className="grid gap-0.5">
-                <Label className="text-sm">{t("profile.maxTokensField.label")}</Label>
-                <p className="text-muted-foreground text-xs">{t(`profile.maxTokensFieldHint.${format}`)}</p>
+            {!marketplace && (
+              <div className="flex items-center justify-between gap-4 border-t pt-3">
+                <div className="grid gap-0.5">
+                  <Label className="text-sm">{t("profile.maxTokensField.label")}</Label>
+                  <p className="text-muted-foreground text-xs">{t(`profile.maxTokensFieldHint.${format}`)}</p>
+                </div>
+                <Select
+                  value={format === "openai" ? maxTokensField : NONE}
+                  onValueChange={setMaxTokensField}
+                  disabled={format !== "openai"}
+                >
+                  <SelectTrigger className="w-56 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MAX_TOKENS_FIELDS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select
-                value={format === "openai" ? maxTokensField : NONE}
-                onValueChange={setMaxTokensField}
-                disabled={format !== "openai"}
-              >
-                <SelectTrigger className="w-56 shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MAX_TOKENS_FIELDS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            )}
           </div>
 
-          <div className="grid gap-3 rounded-lg border p-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="grid gap-0.5">
-                <Label className="text-sm">{t("profile.thinkingType.label")}</Label>
-                <p className="text-muted-foreground text-xs">{t("profile.thinkingType.hint")}</p>
+          {format !== "ollama" && !singleResponse && (
+            <div className="grid gap-3 rounded-lg border p-3">
+              <div className="flex items-center justify-between gap-4">
+                <div className="grid gap-0.5">
+                  <Label className="text-sm">{t("profile.thinkingType.label")}</Label>
+                  <p className="text-muted-foreground text-xs">{t("profile.thinkingType.hint")}</p>
+                </div>
+                <Select value={thinkingType} onValueChange={setThinkingType}>
+                  <SelectTrigger className="w-32 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {THINKING_TYPES.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={thinkingType} onValueChange={setThinkingType}>
-                <SelectTrigger className="w-32 shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {THINKING_TYPES.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center justify-between gap-4 border-t pt-3">
-              <div className="grid gap-0.5">
-                <Label className="text-sm">{t("profile.effort.label")}</Label>
-                <p className="text-muted-foreground text-xs">{t("profile.effort.hint")}</p>
+              <div className="flex items-center justify-between gap-4 border-t pt-3">
+                <div className="grid gap-0.5">
+                  <Label className="text-sm">{t("profile.effort.label")}</Label>
+                  <p className="text-muted-foreground text-xs">{t("profile.effort.hint")}</p>
+                </div>
+                <Select value={effort} onValueChange={setEffort}>
+                  <SelectTrigger className="w-32 shrink-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EFFORT_LEVELS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={effort} onValueChange={setEffort}>
-                <SelectTrigger className="w-32 shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {EFFORT_LEVELS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
-          </div>
+          )}
 
           <ProfileRetryFields value={retry} onChange={setRetry} />
         </div>
 
-        <div className="flex gap-2 border-t px-4 py-3">
-          <Button variant="outline" onClick={testConnection} disabled={testing}>
-            {testing ? <Loader2Icon className="animate-spin" /> : <PlugZapIcon />}
-            {testing ? t("profile.testing") : t("profile.testConnection")}
-          </Button>
-          <Button onClick={save} disabled={saving} className="flex-1">
-            {saving && <Loader2Icon className="animate-spin" />}
-            {!saving && (isNew ? <PlusIcon /> : <SaveIcon />)}
-            {isNew ? t("profile.create") : t("profile.save")}
-          </Button>
+        <div className="shrink-0 border-t">
+          {testError && (
+            <p role="alert" className="mx-4 mt-3 max-h-32 overflow-y-auto rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive whitespace-pre-wrap [overflow-wrap:anywhere]">
+              {testError}
+            </p>
+          )}
+          <div className="flex gap-2 px-4 py-3">
+            <Button variant="outline" onClick={testConnection} disabled={testing}>
+              {testing ? <Loader2Icon className="animate-spin" /> : <PlugZapIcon />}
+              {testing ? t("profile.testing") : t("profile.testConnection")}
+            </Button>
+            <Button onClick={save} disabled={saving} className="flex-1">
+              {saving && <Loader2Icon className="animate-spin" />}
+              {!saving && (isNew ? <PlusIcon /> : <SaveIcon />)}
+              {isNew ? t("profile.create") : t("profile.save")}
+            </Button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -739,7 +1009,7 @@ export default function LLMPage() {
   // 一个配置在卡片上显示的「是否正常」。没填 Key 的配置根本发不出请求，比熔断更该先说。
   const healthOf = React.useCallback(
     (p: LLMProfile, m?: LLMPoolMember): Health => {
-      if (!p.api_key_hint) {
+      if (p.format !== "ollama" && !p.api_key_hint) {
         return {
           label: t("health.noKey.label"),
           cls: "border-muted-foreground/40 text-muted-foreground",

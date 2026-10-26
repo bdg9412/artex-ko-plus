@@ -91,10 +91,12 @@ class PackageReleaseTests(unittest.TestCase):
         self.write("docs/FINDING_DEFENSE_INVESTIGATION_KO.md", "Current guide\n")
         self.write("docs/OFFENSIVE_DIAGNOSIS_KO.md", "Current diagnosis guide\n")
         self.write("docs/AUTONOMOUS_HUNTING_KO.md", "Current hunting guide\n")
+        self.write("docs/RELEASE_EVIDENCE_KO.md", "Sanitized release evidence\n")
         self.write("CHANGELOG.md", "Old changes\n", tracked=True)
         self.write("docs/evidence/old-run.md", "Historical run\n", tracked=True)
         self.write("docs/evidence/images/old-run.jpg", "image\n", tracked=True)
         self.write("docs/offensive-diagnostics.md", "Old feature\n", tracked=True)
+        self.write("presentation-output/private.pptx", "Private presentation\n", tracked=True)
         self.write("skills/sample/SKILL.md", "Runtime instructions\n", tracked=True)
         self.write("detections/sigma/README.ko.md", "[Old changes](../../CHANGELOG.md)\n[Old section](../../README.md#old-section)\n", tracked=True)
         result = self.build(github=True)
@@ -106,12 +108,15 @@ class PackageReleaseTests(unittest.TestCase):
                          "Current diagnosis guide\n")
         self.assertEqual((folder / "docs/AUTONOMOUS_HUNTING_KO.md").read_text(),
                          "Current hunting guide\n")
+        self.assertEqual((folder / "docs/RELEASE_EVIDENCE_KO.md").read_text(),
+                         "Sanitized release evidence\n")
         self.assertTrue((folder / "skills/sample/SKILL.md").is_file())
         self.assertEqual((folder / "detections/sigma/README.ko.md").read_text(), "Old changes\nOld section\n")
         self.assertEqual(result["removed_links"], 2)
         for relative in (
             "scripts/release-readme.md", "CHANGELOG.md", "docs/evidence/old-run.md",
             "docs/evidence/images/old-run.jpg", "docs/offensive-diagnostics.md",
+            "presentation-output/private.pptx",
         ):
             self.assertFalse((folder / relative).exists(), relative)
 

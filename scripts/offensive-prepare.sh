@@ -37,5 +37,14 @@ if [ ! -e "$runtime/lab.env" ]; then
   lab_password=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
   printf 'CRAPI_DB_PASSWORD=%s\n' "$lab_password" > "$runtime/lab.env"
 fi
+ensure_env_secret() {
+  secret_name=$1
+  if ! grep -q "^${secret_name}=" "$runtime/lab.env"; then
+    secret_value=$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')
+    printf '%s=%s\n' "$secret_name" "$secret_value" >> "$runtime/lab.env"
+  fi
+}
+ensure_env_secret CRAPI_JWT_SECRET
+ensure_env_secret CRAPI_SECRET_KEY
 chmod 600 "$runtime/token" "$runtime/lab.env"
 printf 'Official crAPI and Benchmark sources ready. Runtime credentials stay in .local-runtime/offensive/.\n'

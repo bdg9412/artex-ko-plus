@@ -3,15 +3,17 @@
 // §4.3 (planner) and §4.4 (work agent).
 //
 // Provider configuration is read from the environment so the system runs with
-// any Anthropic- or OpenAI-format endpoint. If no key is configured, FromEnv
-// returns ok=false and the exploration engine stays idle (an LLM is required).
+// Anthropic, OpenAI-compatible, Amazon Bedrock, or local Ollama endpoints.
+// Cloud providers need a key; explicit Ollama configuration can run without one.
 package agent
 
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"iter"
 	"log"
 	"net/http"
 	"net/url"
@@ -30,10 +32,23 @@ import (
 
 // Config describes the LLM backend resolved from the environment.
 type Config struct {
-	Format  llm.Format
-	BaseURL string
-	APIKey  string
-	Model   string
+	Format llm.Format
+	// ProviderID preserves the UI/environment provider name when multiple
+	// backends share the same wire format. Ollama uses OpenAI chat completions;
+	// Bedrock's legacy Claude Messages endpoint uses the Anthropic wire format.
+	ProviderID string
+	BaseURL    string
+	APIKey     string
+	Model      string
+	// Marketplace text endpoints use InvokeModel with a model-specific body.
+	// Empty values select the conservative TGI/raw defaults.
+	InvokeSchema string
+	PromptStyle  string
+	// CyberAccessProgram opts an OpenAI Responses profile into an approved
+	// cybersecurity access program. Empty leaves the wire request unchanged.
+	// Supported values are standard, daybreak_blue, and daybreak_red; the API
+	// decides whether the selected model and project may use that program.
+	CyberAccessProgram string
 	// Proxy routes all LLM requests through the given proxy URL (http/https/socks5,
 	// optionally with user:pass@ credentials). Empty means direct — it does NOT
 	// fall back to the standard *_PROXY environment variables.
@@ -103,10 +118,16 @@ type RetryConfig struct {
 // threshold math (window − summary reserve − buffer) would go non-positive and
 // compaction would fire every turn; above the cap it would never fire.
 const (
-	defaultWindowK = 200  // unset → assume a 200K window (Claude default)
-	minWindowK     = 32   // floor so effectiveWindow stays comfortably positive
-	maxWindowK     = 1000 // cap at 1M tokens (user request)
+	defaultWindowK              = 200  // unset → assume a 200K window (Claude default)
+	minWindowK                  = 32   // floor so effectiveWindow stays comfortably positive
+	maxWindowK                  = 1000 // cap at 1M tokens (user request)
+	defaultOllamaURL            = "http://127.0.0.1:11434/v1"
+	defaultOllamaModel          = "qwen3:8b"
+	defaultBedrockMaxTokens     = 4096
+	defaultMarketplaceMaxTokens = 2048
 )
+
+var bedrockEndpointHost = regexp.MustCompile(`^(?:bedrock-runtime\.[a-z0-9-]+\.amazonaws\.com|bedrock-mantle\.[a-z0-9-]+\.api\.aws)$`)
 
 // CompactionWindow returns the model context window in TOKENS for compaction
 // thresholds, resolved from the user-configured size (ContextWindowK). 0/unset →
@@ -137,13 +158,13 @@ func compactionConfig(windowTokens int) *compaction.Config {
 
 // FromEnv resolves the LLM provider config:
 //
-//	ARTEX_LLM_PROVIDER = anthropic|openai (default: inferred from keys)
+//	ARTEX_LLM_PROVIDER = anthropic|openai|openai-responses|ollama|bedrock|bedrock-converse (default: inferred from keys)
 //	ARTEX_LLM_MODEL    = model id        (default: per provider)
 //	ARTEX_LLM_BASE_URL = endpoint        (optional)
 //	ARTEX_LLM_PROXY    = proxy URL        (optional; http/https/socks5)
-//	ANTHROPIC_API_KEY / OPENAI_API_KEY         = credentials
+//	ANTHROPIC_API_KEY / OPENAI_API_KEY / BEDROCK_API_KEY = credentials
 func FromEnv() (Config, bool) {
-	prov := os.Getenv("ARTEX_LLM_PROVIDER")
+	prov := strings.ToLower(strings.TrimSpace(os.Getenv("ARTEX_LLM_PROVIDER")))
 	anthKey := os.Getenv("ANTHROPIC_API_KEY")
 	oaiKey := os.Getenv("OPENAI_API_KEY")
 
@@ -159,13 +180,55 @@ func FromEnv() (Config, bool) {
 	}
 
 	c := Config{
-		BaseURL: os.Getenv("ARTEX_LLM_BASE_URL"),
-		Model:   os.Getenv("ARTEX_LLM_MODEL"),
-		Proxy:   strings.TrimSpace(os.Getenv("ARTEX_LLM_PROXY")),
+		ProviderID: prov,
+		BaseURL:    os.Getenv("ARTEX_LLM_BASE_URL"),
+		Model:      os.Getenv("ARTEX_LLM_MODEL"),
+		Proxy:      strings.TrimSpace(os.Getenv("ARTEX_LLM_PROXY")),
 		// 默认流式;ARTEX_LLM_STREAM=false/0/off 显式关闭走非流式。
 		Stream: !isFalsy(os.Getenv("ARTEX_LLM_STREAM")),
 	}
 	switch prov {
+	case "bedrock-converse":
+		c.Format = llm.Format("bedrock-converse")
+		c.Model = strings.TrimSpace(c.Model)
+		c.BaseURL = strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
+		c.MaxTokens = defaultBedrockMaxTokens
+		c.APIKey = strings.TrimSpace(os.Getenv("BEDROCK_API_KEY"))
+		if c.APIKey == "" {
+			c.APIKey = strings.TrimSpace(os.Getenv("AWS_BEARER_TOKEN_BEDROCK"))
+		}
+	case "bedrock-marketplace":
+		c.Format = llm.Format("bedrock-marketplace")
+		c.ContextWindowK = minWindowK
+		c.Model = strings.TrimSpace(c.Model)
+		c.APIKey = strings.TrimSpace(os.Getenv("BEDROCK_API_KEY"))
+		if c.APIKey == "" {
+			c.APIKey = strings.TrimSpace(os.Getenv("AWS_BEARER_TOKEN_BEDROCK"))
+		}
+		c.InvokeSchema = strings.TrimSpace(os.Getenv("ARTEX_LLM_INVOKE_SCHEMA"))
+		c.PromptStyle = strings.TrimSpace(os.Getenv("ARTEX_LLM_PROMPT_STYLE"))
+		c.MaxTokens = defaultMarketplaceMaxTokens
+	case "bedrock":
+		c.Format = llm.FormatAnthropic
+		c.Model = strings.TrimSpace(c.Model)
+		c.BaseURL = bedrockBaseURL(c.BaseURL)
+		c.MaxTokens = defaultBedrockMaxTokens
+		c.APIKey = strings.TrimSpace(os.Getenv("BEDROCK_API_KEY"))
+		if c.APIKey == "" {
+			c.APIKey = strings.TrimSpace(os.Getenv("AWS_BEARER_TOKEN_BEDROCK"))
+		}
+	case "ollama":
+		c.Format = llm.FormatOpenAI
+		c.ContextWindowK = minWindowK
+		// A local Ollama server does not require an API key. Never reuse an
+		// OpenAI key from the process environment for this backend.
+		if strings.TrimSpace(c.BaseURL) == "" {
+			c.BaseURL = defaultOllamaURL
+		}
+		c.BaseURL = openAIChatBaseURL(c.BaseURL)
+		if strings.TrimSpace(c.Model) == "" {
+			c.Model = defaultOllamaModel
+		}
 	case "openai":
 		c.Format = llm.FormatOpenAI
 		c.APIKey = oaiKey
@@ -185,8 +248,23 @@ func FromEnv() (Config, bool) {
 			c.Model = "claude-opus-4-8"
 		}
 	}
-	if c.APIKey == "" {
+	if c.APIKey == "" && !c.IsOllama() {
 		return Config{}, false
+	}
+	if c.IsBedrock() {
+		if err := c.validateBedrock(); err != nil {
+			return Config{}, false
+		}
+	}
+	if c.IsBedrockMarketplace() {
+		if err := c.validateBedrockMarketplace(); err != nil {
+			return Config{}, false
+		}
+	}
+	if c.IsBedrockConverse() {
+		if err := c.validateBedrockConverse(); err != nil {
+			return Config{}, false
+		}
 	}
 	return c, true
 }
@@ -197,17 +275,42 @@ func FromEnv() (Config, bool) {
 // endpoint path itself), so a full endpoint URL is tolerated.
 func ConfigFrom(provider, model, baseURL, apiKey, proxy string) Config {
 	c := Config{
-		Model:   strings.TrimSpace(model),
-		BaseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		APIKey:  strings.TrimSpace(apiKey),
-		Proxy:   strings.TrimSpace(proxy),
-		Stream:  true, // 默认流式;调用方按 profile 覆盖
+		ProviderID: strings.ToLower(strings.TrimSpace(provider)),
+		Model:      strings.TrimSpace(model),
+		BaseURL:    strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		APIKey:     strings.TrimSpace(apiKey),
+		Proxy:      strings.TrimSpace(proxy),
+		Stream:     true, // 默认流式;调用方按 profile 覆盖
 	}
-	switch strings.TrimSpace(provider) {
+	switch c.ProviderID {
+	case "bedrock-converse":
+		c.Format = llm.Format("bedrock-converse")
+		c.MaxTokens = defaultBedrockMaxTokens
+	case "bedrock-marketplace":
+		c.Format = llm.Format("bedrock-marketplace")
+		c.ContextWindowK = minWindowK
+		c.MaxTokens = defaultMarketplaceMaxTokens
+	case "bedrock":
+		c.Format = llm.FormatAnthropic
+		c.BaseURL = bedrockBaseURL(c.BaseURL)
+		c.MaxTokens = defaultBedrockMaxTokens
+	case "ollama":
+		c.Format = llm.FormatOpenAI
+		c.ContextWindowK = minWindowK
+		// Ignore even a supplied key: switching a saved OpenAI profile to
+		// Ollama must not send its previous credential to the local server.
+		c.APIKey = ""
+		if c.BaseURL == "" {
+			c.BaseURL = defaultOllamaURL
+		}
+		c.BaseURL = openAIChatBaseURL(c.BaseURL)
+		if c.Model == "" {
+			c.Model = defaultOllamaModel
+		}
 	case "openai":
 		c.Format = llm.FormatOpenAI
 		// provider appends "/chat/completions"; tolerate a full endpoint URL.
-		c.BaseURL = strings.TrimRight(strings.TrimSuffix(c.BaseURL, "/chat/completions"), "/")
+		c.BaseURL = openAIChatBaseURL(c.BaseURL)
 		if c.Model == "" {
 			c.Model = "gpt-4o"
 		}
@@ -229,6 +332,62 @@ func ConfigFrom(provider, model, baseURL, apiKey, proxy string) Config {
 	return c
 }
 
+func openAIChatBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(baseURL), "/"), "/chat/completions"), "/")
+}
+
+// Norma appends /v1/messages to an Anthropic-format base URL. Both Bedrock
+// endpoint families expose that path below /anthropic.
+func bedrockBaseURL(baseURL string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	return strings.TrimRight(strings.TrimSuffix(baseURL, "/v1/messages"), "/")
+}
+
+func validBedrockClaudeModel(model string) bool {
+	if strings.HasPrefix(model, "arn:") {
+		parts := strings.SplitN(model, ":", 6)
+		if len(parts) != 6 || (parts[1] != "aws" && parts[1] != "aws-us-gov" && parts[1] != "aws-cn") ||
+			parts[2] != "bedrock" || parts[3] == "" {
+			return false
+		}
+		resource := strings.SplitN(parts[5], "/", 2)
+		if len(resource) != 2 {
+			return false
+		}
+		switch resource[0] {
+		case "foundation-model", "inference-profile", "application-inference-profile":
+			model = resource[1]
+		default:
+			return false
+		}
+	}
+	for _, prefix := range []string{"anthropic.", "us.anthropic.", "eu.anthropic.", "apac.anthropic.", "global.anthropic."} {
+		if strings.HasPrefix(model, prefix) && len(model) > len(prefix) {
+			return !strings.ContainsAny(model, " \t\r\n/?#")
+		}
+	}
+	return false
+}
+
+func (c Config) validateBedrock() error {
+	if c.Format != llm.FormatAnthropic {
+		return fmt.Errorf("llm: Bedrock requires Anthropic Messages format")
+	}
+	if c.APIKey == "" {
+		return fmt.Errorf("llm: Bedrock API key required")
+	}
+	if !validBedrockClaudeModel(c.Model) {
+		return fmt.Errorf("llm: Bedrock requires an explicit Claude model ID or inference-profile ARN")
+	}
+	u, err := url.Parse(c.BaseURL)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" ||
+		u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || u.Path != "/anthropic" ||
+		!bedrockEndpointHost.MatchString(strings.ToLower(u.Hostname())) {
+		return fmt.Errorf("llm: Bedrock base URL must be an HTTPS AWS Bedrock /anthropic endpoint")
+	}
+	return nil
+}
+
 // isFalsy reports whether an env-var string explicitly requests "off". Empty or
 // unrecognized → false (so an unset var keeps the streaming default).
 func isFalsy(s string) bool {
@@ -239,8 +398,32 @@ func isFalsy(s string) bool {
 	return false
 }
 
-// Provider returns the short provider name ("anthropic"/"openai").
+// IsOllama reports whether this config uses the local Ollama backend.
+func (c Config) IsOllama() bool { return c.ProviderID == "ollama" }
+
+// IsBedrock reports whether this config uses the Bedrock Claude Messages API.
+func (c Config) IsBedrock() bool { return c.ProviderID == "bedrock" }
+
+// IsBedrockConverse reports whether this config uses Bedrock's model-neutral Converse API.
+func (c Config) IsBedrockConverse() bool { return c.ProviderID == "bedrock-converse" }
+
+// IsBedrockMarketplace reports whether this config invokes a Marketplace endpoint.
+func (c Config) IsBedrockMarketplace() bool { return c.ProviderID == "bedrock-marketplace" }
+
+// Provider returns the short provider name.
 func (c Config) Provider() string {
+	if c.IsOllama() {
+		return "ollama"
+	}
+	if c.IsBedrock() {
+		return "bedrock"
+	}
+	if c.IsBedrockConverse() {
+		return "bedrock-converse"
+	}
+	if c.IsBedrockMarketplace() {
+		return "bedrock-marketplace"
+	}
 	switch c.Format {
 	case llm.FormatOpenAI:
 		return "openai"
@@ -254,7 +437,31 @@ func (c Config) Provider() string {
 // limiter lives on the single provider instance — so planner + all workers +
 // main agent (which share this provider) are bounded by one shared rate limit.
 func (c Config) NewProvider() (llm.Provider, error) {
-	client, err := quotaAwareHTTPClient(c.Proxy, c.SessionHeaderKey)
+	if c.IsBedrockConverse() {
+		return newBedrockConverseProvider(c)
+	}
+	if c.IsBedrockMarketplace() {
+		return newBedrockMarketplaceProvider(c)
+	}
+	if c.IsBedrock() {
+		if err := c.validateBedrock(); err != nil {
+			return nil, err
+		}
+	}
+	cyberProgram := strings.ToLower(strings.TrimSpace(c.CyberAccessProgram))
+	if cyberProgram != "" {
+		if c.Format != llm.FormatOpenAIResponses || c.IsOllama() {
+			return nil, fmt.Errorf("llm: cyber access program is only supported for openai-responses profiles")
+		}
+		switch cyberProgram {
+		case "standard", "daybreak_blue", "daybreak_red":
+		default:
+			return nil, fmt.Errorf("llm: unsupported cyber access program %q", c.CyberAccessProgram)
+		}
+	}
+	client, err := quotaAwareHTTPClient(c.Proxy, c.SessionHeaderKey, providerTransportOptions{
+		stripAuth: c.IsOllama(), cyberAccessProgram: cyberProgram,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -265,6 +472,13 @@ func (c Config) NewProvider() (llm.Provider, error) {
 		Model:      c.Model,
 		HTTPClient: client,
 	}
+	if c.IsOllama() {
+		// Norma's OpenAI client may require a non-empty key while building a
+		// provider. The transport below removes its placeholder auth header
+		// before the request reaches Ollama.
+		lc.Format = llm.FormatOpenAI
+		lc.APIKey = "ollama"
+	}
 	// 思考开关与强度两个字段各自透传(空 = 该字段不发送)。二者解耦:
 	// 可只发 thinking.type、只发 effort、都发、或都不发。
 	lc.ThinkingType = c.ThinkingType
@@ -272,6 +486,14 @@ func (c Config) NewProvider() (llm.Provider, error) {
 	// 输出上限的字段名选择(空 = 用 max_tokens)。上限的「值」不在这里:它每轮随
 	// agentcore.Options.MaxTokens 走,provider 只决定把它塞进哪个键。
 	lc.MaxTokensField = c.MaxTokensField
+	if c.IsOllama() {
+		// These are provider-specific request fields; a profile converted from
+		// OpenAI may still carry them, but the Ollama chat endpoint does not
+		// need them for basic completion and tool calls.
+		lc.ThinkingType = ""
+		lc.ReasoningEffort = ""
+		lc.MaxTokensField = ""
+	}
 	// 重试参数与 SDK 同语义(次数 0=默认/负=关闭,间隔 0=指数退避/>0=固定),原样透传。
 	lc.MaxRetries = c.Retry.ConnectAttempts
 	lc.RetryInterval = c.Retry.ConnectInterval
@@ -280,7 +502,43 @@ func (c Config) NewProvider() (llm.Provider, error) {
 	if c.RatePerSecond > 0 || c.RatePerMinute > 0 {
 		lc.RateLimit = &llm.RateLimit{PerSecond: c.RatePerSecond, PerMinute: c.RatePerMinute}
 	}
-	return llm.NewProvider(lc)
+	provider, err := llm.NewProvider(lc)
+	if err != nil {
+		return provider, err
+	}
+	if c.IsOllama() {
+		return newOllamaContextProvider(provider, c, client), nil
+	}
+	if c.IsBedrock() {
+		maxTokens := c.MaxTokens
+		if maxTokens <= 0 {
+			maxTokens = defaultBedrockMaxTokens
+		}
+		return bedrockMaxTokensProvider{Provider: provider, maxTokens: maxTokens}, nil
+	}
+	return provider, nil
+}
+
+// Bedrock Messages requires max_tokens. Some direct callers bypass agentcore's
+// MaxTokens option, so supply a bounded value on both completion paths.
+type bedrockMaxTokensProvider struct {
+	llm.Provider
+	maxTokens int
+}
+
+func (p bedrockMaxTokensProvider) withMaxTokens(req llm.CompletionRequest) llm.CompletionRequest {
+	if req.MaxTokens <= 0 {
+		req.MaxTokens = p.maxTokens
+	}
+	return req
+}
+
+func (p bedrockMaxTokensProvider) Complete(ctx context.Context, req llm.CompletionRequest) (llm.Message, string, llm.Usage, error) {
+	return p.Provider.Complete(ctx, p.withMaxTokens(req))
+}
+
+func (p bedrockMaxTokensProvider) Stream(ctx context.Context, req llm.CompletionRequest) iter.Seq2[llm.StreamEvent, error] {
+	return p.Provider.Stream(ctx, p.withMaxTokens(req))
 }
 
 // IsQuotaExhaustedMessage deliberately recognizes only explicit balance,
@@ -329,13 +587,30 @@ func IsQuotaExhaustedMessage(message string) bool {
 // response body for provider-specific classification and audit logs.
 type quotaAwareTransport struct {
 	base http.RoundTripper
+	// stripAuth prevents OpenAI credentials or the internal placeholder from
+	// reaching Ollama. Only enabled for an explicit Ollama configuration.
+	stripAuth bool
 	// sessionHeaderKey, when non-empty, is the HTTP header name each request
 	// carries; its value is the session id read from the request context. Empty
 	// disables it. See Config.SessionHeaderKey.
 	sessionHeaderKey string
+	// cyberAccessProgram is injected into Responses API JSON only when explicitly
+	// selected by this provider's profile. Empty does not touch the request body.
+	cyberAccessProgram string
 }
 
 func (t quotaAwareTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.stripAuth || t.cyberAccessProgram != "" {
+		// Clone before mutating so a shared caller request is left untouched.
+		req = req.Clone(req.Context())
+	}
+	if t.cyberAccessProgram != "" && req.Method == http.MethodPost && strings.HasSuffix(req.URL.Path, "/responses") {
+		var err error
+		req, err = withCyberAccessProgram(req, t.cyberAccessProgram)
+		if err != nil {
+			return nil, err
+		}
+	}
 	// Custom session-id header: name is user-configured, value is THIS run's
 	// session id (norma stashes it on the context via transcript.WithSessionID).
 	// Stable across a session's turns and distinct across sessions — exactly what
@@ -344,6 +619,10 @@ func (t quotaAwareTransport) RoundTrip(req *http.Request) (*http.Response, error
 		if sid := transcript.SessionIDFrom(req.Context()); sid != "" {
 			req.Header.Set(t.sessionHeaderKey, sid)
 		}
+	}
+	if t.stripAuth {
+		req.Header.Del("Authorization")
+		req.Header.Del("X-Api-Key")
 	}
 	// When LLM recording is on, the Recorder puts a Capture on the context so the
 	// raw wire bodies can be persisted. This is the only layer that still sees
@@ -378,6 +657,57 @@ func (t quotaAwareTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return resp, nil
 }
 
+// withCyberAccessProgram adds the documented Responses API request field while
+// preserving all other JSON fields. Norma constructs requests with GetBody, so
+// this transport can read the body without consuming the original or breaking
+// retries. It runs before llmrec captures the outgoing wire bytes.
+func withCyberAccessProgram(req *http.Request, program string) (*http.Request, error) {
+	if req.GetBody == nil {
+		return nil, fmt.Errorf("llm: cannot set cyber access program on request without replayable JSON body")
+	}
+	bodyReader, err := req.GetBody()
+	if err != nil {
+		return nil, fmt.Errorf("llm: read Responses request body: %w", err)
+	}
+	raw, readErr := io.ReadAll(bodyReader)
+	closeErr := bodyReader.Close()
+	if readErr != nil {
+		return nil, fmt.Errorf("llm: read Responses request body: %w", readErr)
+	}
+	if closeErr != nil {
+		return nil, fmt.Errorf("llm: close Responses request body: %w", closeErr)
+	}
+	var body map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return nil, fmt.Errorf("llm: invalid Responses request JSON: %v", err)
+	}
+	if body == nil {
+		return nil, fmt.Errorf("llm: Responses request body must be a JSON object")
+	}
+	programs := make(map[string]json.RawMessage)
+	if existing, ok := body["access_programs"]; ok && !bytes.Equal(bytes.TrimSpace(existing), []byte("null")) {
+		if err := json.Unmarshal(existing, &programs); err != nil {
+			return nil, fmt.Errorf("llm: invalid Responses access_programs JSON: %v", err)
+		}
+		if programs == nil {
+			return nil, fmt.Errorf("llm: Responses access_programs must be a JSON object")
+		}
+	}
+	programs["cyber"], _ = json.Marshal(program)
+	body["access_programs"], err = json.Marshal(programs)
+	if err != nil {
+		return nil, fmt.Errorf("llm: encode Responses access_programs: %w", err)
+	}
+	encoded, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("llm: encode Responses request: %w", err)
+	}
+	req.Body = io.NopCloser(bytes.NewReader(encoded))
+	req.GetBody = func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(encoded)), nil }
+	req.ContentLength = int64(len(encoded))
+	return req, nil
+}
+
 // requestBodySnapshot copies an outgoing request body without consuming it.
 // norma builds every model request from a *bytes.Reader, so net/http populates
 // GetBody and the copy has no effect on what gets sent.
@@ -397,7 +727,16 @@ func requestBodySnapshot(req *http.Request) string {
 	return string(b)
 }
 
-func quotaAwareHTTPClient(proxy, sessionHeaderKey string) (*http.Client, error) {
+type providerTransportOptions struct {
+	stripAuth          bool
+	cyberAccessProgram string
+}
+
+func quotaAwareHTTPClient(proxy, sessionHeaderKey string, opts ...providerTransportOptions) (*http.Client, error) {
+	var option providerTransportOptions
+	if len(opts) > 0 {
+		option = opts[0]
+	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	proxy = strings.TrimSpace(proxy)
 	if proxy == "" {
@@ -416,7 +755,11 @@ func quotaAwareHTTPClient(proxy, sessionHeaderKey string) (*http.Client, error) 
 		}
 		transport.Proxy = http.ProxyURL(proxyURL)
 	}
-	return &http.Client{Transport: quotaAwareTransport{base: transport, sessionHeaderKey: strings.TrimSpace(sessionHeaderKey)}}, nil
+	return &http.Client{Transport: quotaAwareTransport{
+		base: transport, stripAuth: option.stripAuth,
+		sessionHeaderKey:   strings.TrimSpace(sessionHeaderKey),
+		cyberAccessProgram: option.cyberAccessProgram,
+	}}, nil
 }
 
 // logTestConnection prints the raw HTTP status code(s) and response body of a
@@ -459,7 +802,12 @@ func TestConnection(ctx context.Context, c Config) (time.Duration, string, error
 	if err != nil {
 		return 0, "", err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	timeout := 30 * time.Second
+	if c.IsOllama() {
+		// A local model may need to load its weights on the first request.
+		timeout = 90 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	// 抓取原始 wire 报文:连接测试最需要看到的就是网关到底回了什么(状态码+响应体),
 	// 而 norma 把响应解码成 StreamEvent 后这些就没了。quotaAwareTransport 会在
@@ -473,6 +821,17 @@ func TestConnection(ctx context.Context, c Config) (time.Duration, string, error
 	// 一套发头逻辑;未配 SessionHeaderKey 的端点不读它,无副作用。
 	ctx = transcript.WithSessionID(ctx, "conntest-"+transcript.NewSessionID())
 	start := time.Now()
+	testMaxTokens := 8192
+	if c.IsBedrockMarketplace() || c.IsBedrockConverse() {
+		testMaxTokens = c.MaxTokens
+		if testMaxTokens <= 0 {
+			if c.IsBedrockConverse() {
+				testMaxTokens = defaultBedrockMaxTokens
+			} else {
+				testMaxTokens = defaultMarketplaceMaxTokens
+			}
+		}
+	}
 	// MaxTokens 要给足：推理模型(如 deepseek-v4-pro)在给出答案前会先产出一大段
 	// 思考(实测对一句 "ping" 也能烧 ~2900 token)。若只给 32,模型会一直卡在"思考阶段"
 	// 就撞到输出上限(finish=length)、被截断,连接测试虽仍算通(err=nil)但显示成
@@ -483,7 +842,7 @@ func TestConnection(ctx context.Context, c Config) (time.Duration, string, error
 		SystemPrompt:   []string{"你是连接测试。直接输出两个字符 OK 即可，不要思考、不要解释、不要别的。"},
 		PermissionMode: acperm.ModeBypass,
 		MaxTurns:       1,
-		MaxTokens:      8192,
+		MaxTokens:      testMaxTokens,
 		NonStreaming:   !c.Stream, // 用该 profile 的真实收发模式做连接测试
 	}, "ping")
 	lat := time.Since(start)

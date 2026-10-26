@@ -3297,18 +3297,34 @@
       "descEdit": "修改后点击保存；激活配置保存后对全部 Agent 立即生效。",
       "name": {
         "label": "名称",
-        "placeholder": "例如：OpenAI 生产"
+        "placeholder": "例如：默认诊断模型"
       },
       "format": {
         "label": "格式",
-        "placeholder": "选择格式"
+        "placeholder": "选择格式",
+        "ollama": "Ollama（本地）",
+        "bedrock": "Amazon Bedrock（Claude）",
+        "converse": "Amazon Bedrock（Converse · 通用）",
+        "marketplace": "Amazon Bedrock Marketplace（InvokeModel）"
       },
       "model": {
         "label": "模型",
-        "loadTitle": "从 API 加载可用模型"
+        "loadTitle": "从 API 加载可用模型",
+        "ollamaHint": "选择 Ollama 中已安装的模型，或输入准确名称。可使用旁边的刷新按钮加载模型列表。上下文窗口默认 32K，应与 Ollama 服务端设置一致。",
+        "bedrockHint": "准确填写 Bedrock Claude 模型 ID 或 Claude 推理配置文件 ID。模型列表不会自动加载。此集成支持 Claude 模型。",
+        "converseHint": "填写支持 Bedrock Converse 的模型 ID 或推理配置文件 ID；不限于 GLM 等特定模型。模型列表不会自动加载。",
+        "marketplaceLabel": "Marketplace 端点 ARN",
+        "marketplaceHint": "填写 Bedrock → Marketplace deployments 中已部署端点的完整 arn:aws:sagemaker:… ARN。不能使用模型显示名称或基础模型 ID。目前支持标准 AWS 区域。"
       },
       "baseUrl": {
-        "label": "Base URL（可选）"
+        "label": "Base URL（可选）",
+        "ollamaHint": "这是 Docker Compose 的默认地址。若直接在主机上运行应用，请改为 http://127.0.0.1:11434/v1。",
+        "bedrockLabel": "Bedrock Base URL（必填）",
+        "bedrockHint": "填写要使用的区域 URL，例如 https://bedrock-runtime.us-east-1.amazonaws.com/anthropic。也可以使用 Bedrock Mantle 的 /anthropic URL。末尾不要添加 /v1/messages。",
+        "converseLabel": "Bedrock Runtime URL（必填）",
+        "converseHint": "填写要使用区域的地址，例如 https://bedrock-runtime.ap-northeast-2.amazonaws.com。不要附加 /model 路径。",
+        "marketplaceLabel": "Bedrock Runtime URL（必填）",
+        "marketplaceHint": "从端点 ARN 自动读取区域并填入。必须是同一区域的 https://bedrock-runtime.<区域>.amazonaws.com 地址，不要附加路径。"
       },
       "proxy": {
         "label": "代理（可选）",
@@ -3320,12 +3336,35 @@
         "hint": "填写头名后，每次请求都会带上这个 HTTP 头，头值自动填为 <b>当前会话的 session id</b>（chat 会话如 conv-12、worker 如 exp3-worker-i87）。用于按 session-id 头做提示缓存 / 粘性路由的网关；同一会话多轮稳定、不同会话互不相同。留空则不发送。"
       },
       "apiKey": {
-        "placeholderSet": "已设置（{hint}），留空保持不变"
+        "placeholderSet": "已设置（{hint}），留空保持不变",
+        "bedrockLabel": "Amazon Bedrock API Key（必填）",
+        "bedrockPlaceholder": "Amazon Bedrock API 密钥",
+        "bedrockHint": "填写 Amazon Bedrock API 密钥。新配置必填；保存后密钥将被隐藏。"
+      },
+      "marketplace": {
+        "region": "端点区域：{region}",
+        "hint": "选择 Marketplace 文本模型的 InvokeModel 请求与响应格式。模型格式可能不同，请对照部署页面的调用示例。本设置不代表支持所有 Marketplace 模型格式。",
+        "schemaLabel": "请求／响应格式",
+        "schemaTgi": "TGI · inputs / generated_text",
+        "schemaDeepseek": "DeepSeek 原生 · prompt / choices[0].text",
+        "promptLabel": "对话提示词格式",
+        "promptRaw": "原文（raw）",
+        "promptDeepseek": "DeepSeek",
+        "promptQwen": "Qwen",
+        "promptLlama": "Llama",
+        "testHint": "连接测试会实际调用已部署的端点一次，可能产生 AWS 使用费用。"
+      },
+      "daybreak": {
+        "enabled": "使用 Daybreak",
+        "hint": "关闭时不发送 access_programs.cyber，实际选择遵循 API 项目策略。开启后，Responses API 请求和连接测试会发送所选程序；API 项目需要相应权限。",
+        "program": "API 访问程序"
       },
       "rps": "每秒限速",
       "rpm": "每分钟限速",
       "cw": "上下文窗口(K)",
       "rateHint": "限速 0 = 不限，全 Agent 共享。上下文窗口单位 K（千 token），0 = 默认 200K，上限 1000（即 1M）；设太高会导致压缩不触发。",
+      "rateHintOllama": "限速 0 = 不限。上下文窗口单位为 K（千 token）；设为 0 时使用 Ollama 默认的 32K。请与 Ollama 服务端的上下文设置保持一致。",
+      "rateHintMarketplace": "限速 0 = 不限，所有 Agent 共享。上下文窗口单位为 K（千 token）；设为 0 时保守地使用 32K。请按已部署模型的实际上下文容量调整。",
       "priority": {
         "label": "轮询优先级",
         "hint": "数字越大越先被选中；激活配置恒为第 1 顺位，与本值无关。相同优先级的配置会轮流打头，天然分摊额度。"
@@ -3338,11 +3377,16 @@
       "streaming": {
         "label": "流式输出 · streaming",
         "hint": "开启（默认）走流式 SSE，有运行中实时进度与实时 token 计数。 关闭则走真·非流式（stream:false，一次性返回完整响应）——可绕开部分网关糟糕的 SSE 实现（空帧 / 思考字段丢帧），代价是失去运行中的实时进度。",
+        "marketplaceHint": "此 Marketplace 连接使用 InvokeModel 一次返回完整响应，不支持流式输出。",
+        "converseHint": "当前 Converse 连接一次返回完整响应，不支持运行时实时输出。",
         "aria": "流式输出"
       },
       "maxTokens": {
         "label": "输出上限 · max tokens",
-        "hint": "单次回复最多生成多少 token，随每次请求发出。0（默认）= 不发送该字段，由服务端默认值决定。 这与上面的「上下文窗口」是两回事：那是模型总容量，只在本地用来算压缩阈值。 设太小会让推理模型在思考阶段就被截断，一个字答案都出不来。"
+        "hint": "单次回复最多生成多少 token，随每次请求发出。0（默认）= 不发送该字段，由服务端默认值决定。 这与上面的「上下文窗口」是两回事：那是模型总容量，只在本地用来算压缩阈值。 设太小会让推理模型在思考阶段就被截断，一个字答案都出不来。",
+        "bedrockHint": "Bedrock Claude 单次回复的最大生成 token 数。设为 0 时，请求会明确发送 max_tokens: 4096。此值与上下文窗口不同。",
+        "converseHint": "Converse 请求的最大输出 token 数。设为 0 时使用安全默认值 4096；此值与上下文窗口不同。",
+        "marketplaceHint": "单次回复的最大生成 token 数。设为 0 时明确发送 2048。实际字段名称取决于上方选择的请求格式。"
       },
       "maxTokensField": {
         "label": "上限字段名",
@@ -3353,7 +3397,10 @@
       "maxTokensFieldHint": {
         "openai": "上限发哪个键。max_tokens 是默认，绝大多数兼容网关只认它；OpenAI 官方推理模型（o 系列 / GPT-5）反过来只认 max_completion_tokens，收到 max_tokens 会直接报 unsupported_parameter。",
         "anthropic": "仅 openai 格式可选。Anthropic 的字段名固定为 max_tokens。",
-        "openai-responses": "仅 openai 格式可选。Responses API 的字段名固定为 max_output_tokens。"
+        "openai-responses": "仅 openai 格式可选。Responses API 的字段名固定为 max_output_tokens。",
+        "ollama": "Ollama 使用默认的 max_tokens 字段。",
+        "bedrock": "Bedrock Claude Messages API 使用 max_tokens 字段。",
+        "bedrock-converse": "Bedrock Converse 使用 inferenceConfig.maxTokens。"
       },
       "thinkingType": {
         "label": "思考开关 · thinking.type",
@@ -3386,6 +3433,9 @@
         "unknown": "未知",
         "testError": "测试出错：{msg}",
         "nameModelRequired": "请填写名称与模型",
+        "bedrockCredentialsRequired": "请填写 Bedrock Base URL 和 API 密钥",
+        "converseCredentialsRequired": "请填写 Bedrock 模型 ID、Runtime URL 和 API 密钥",
+        "marketplaceCredentialsRequired": "请填写完整的 Marketplace 端点 ARN、同区域 Runtime URL 和 Bedrock API 密钥",
         "created": "已新建：{name}（在卡片上「设为激活」以启用）",
         "savedActive": "已保存，激活配置即时生效，无需重启",
         "saved": "已保存",

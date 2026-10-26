@@ -1026,7 +1026,7 @@ export interface NotificationDelivery {
 export interface LLMProfile {
   id: string;
   name: string;
-  format: "openai" | "anthropic" | "openai-responses";
+  format: "openai" | "anthropic" | "openai-responses" | "ollama" | "bedrock" | "bedrock-converse" | "bedrock-marketplace";
   base_url?: string;
   proxy?: string;
   model: string;
@@ -1038,6 +1038,8 @@ export interface LLMProfile {
   thinking_type?: string;
   // 思考强度: ""=不发送(默认) | "low"/"medium"/"high"/"xhigh"/"max"
   reasoning_effort?: string;
+  // OpenAI Responses API access_programs.cyber. Empty = omit the field.
+  cyber_access_program?: "" | "standard" | "daybreak_blue" | "daybreak_red";
   is_default: boolean;
   // 轮询顺位：越大越先被选中。激活配置恒为链首，与本值无关。
   priority?: number;
@@ -1051,6 +1053,9 @@ export interface LLMProfile {
   // 上限用哪个请求字段名，仅 format="openai" 有意义：
   // ""=max_tokens(默认) | "max_completion_tokens"(OpenAI 推理模型只认它)
   max_tokens_field?: string;
+  // Bedrock Marketplace InvokeModel text adapter: response/request schema and prompt wrapper.
+  invoke_schema?: "tgi" | "deepseek";
+  prompt_style?: "raw" | "deepseek" | "qwen" | "llama";
   // 自定义会话头名：非空时每次请求带该 HTTP 头，头值=当前会话/意图的 session id。
   // ""=不发送。用于按 session-id 头做提示缓存/粘性路由的网关。
   session_header_key?: string;

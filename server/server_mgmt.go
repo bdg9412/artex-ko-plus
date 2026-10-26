@@ -1884,9 +1884,42 @@ func (s *Server) pgSaveProfile(w http.ResponseWriter, r *http.Request) {
 	if p.Format != "openai" || p.MaxTokensField != llm.MaxTokensFieldCompletion {
 		p.MaxTokensField = ""
 	}
+	if p.Format != "bedrock-marketplace" {
+		p.InvokeSchema, p.PromptStyle = "", ""
+	}
+	if !db.ValidCyberAccessProgram(p.Format, p.CyberAccessProgram) {
+		writeErr(w, 400, "cyber_access_program must be empty or standard/daybreak_blue/daybreak_red for openai-responses")
+		return
+	}
+	if p.Format == "bedrock" || p.Format == "bedrock-converse" || p.Format == "bedrock-marketplace" {
+		key := p.APIKey
+		if key == "" && p.ID != 0 {
+			if stored, err := pg.ProfileByID(p.ID); err == nil && stored != nil && stored.Format == p.Format {
+				key = stored.APIKey
+			}
+		}
+		if key == "" {
+			writeErr(w, 400, db.ErrBedrockAPIKeyRequired.Error())
+			return
+		}
+		cfg := agent.ConfigFrom(p.Format, p.Model, p.BaseURL, key, p.Proxy)
+		cfg.InvokeSchema, cfg.PromptStyle = p.InvokeSchema, p.PromptStyle
+		cfg.MaxTokens = p.MaxTokens
+		cfg.SessionHeaderKey = p.SessionHeaderKey
+		cfg.ThinkingType, cfg.ReasoningEffort = p.ThinkingType, p.ReasoningEffort
+		cfg.CyberAccessProgram = p.CyberAccessProgram
+		if _, err := cfg.NewProvider(); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
+	}
 	id, err := pg.SaveProfile(&p)
 	if err != nil {
-		writeErr(w, 500, err.Error())
+		if errors.Is(err, db.ErrBedrockAPIKeyRequired) {
+			writeErr(w, 400, err.Error())
+		} else {
+			writeErr(w, 500, err.Error())
+		}
 		return
 	}
 	// Editing a profile rebuilds any task pinned to it on its next round. Reapply
@@ -2054,20 +2087,32 @@ func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	// Resolve API key: form input > profile stored key.
+	provider := strings.TrimSpace(req.Provider)
+	if provider == "bedrock" || provider == "bedrock-converse" || provider == "bedrock-marketplace" {
+		// Bedrock Runtime does not expose a models-list API for these routes.
+		// The UI accepts an explicit model or inference-profile ID instead.
+		writeJSON(w, 200, map[string]any{"ok": false, "error": "Bedrock 모델 ID를 직접 입력하세요"})
+		return
+	}
+	// Ollama needs no key. Never forward a key from a previously selected
+	// hosted profile to a local model endpoint.
 	apiKey := strings.TrimSpace(req.APIKey)
-	if apiKey == "" && req.ProfileID != nil {
+	if provider == "ollama" {
+		apiKey = ""
+	}
+	if apiKey == "" && provider != "ollama" && req.ProfileID != nil {
 		if p, err := s.m.pg.ProfileByID(*req.ProfileID); err == nil && p != nil {
-			apiKey = p.APIKey
+			if p.Format == provider {
+				apiKey = p.APIKey
+			}
 		}
 	}
-	if apiKey == "" {
+	if apiKey == "" && provider != "ollama" {
 		writeJSON(w, 200, map[string]any{"ok": false, "error": errMgmtNoAPIKey})
 		return
 	}
 
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
-	provider := strings.TrimSpace(req.Provider)
 
 	// Candidate endpoints to try in order. Some Anthropic-compatible providers
 	// (e.g. DeepSeek) implement /v1/messages under an /anthropic path but expose
@@ -2091,14 +2136,22 @@ func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 
 	var candidates []candidate
 	switch provider {
-	case "openai", "openai-responses":
+	case "openai", "openai-responses", "ollama":
 		// Responses API shares the OpenAI model list at /v1/models; tolerate a full
 		// endpoint URL of either format.
 		if baseURL == "" {
-			baseURL = "https://api.openai.com/v1"
+			if provider == "ollama" {
+				baseURL = agent.ConfigFrom("ollama", "", "", "", "").BaseURL
+			} else {
+				baseURL = "https://api.openai.com/v1"
+			}
 		}
 		b := strings.TrimRight(strings.TrimSuffix(strings.TrimSuffix(baseURL, "/chat/completions"), "/responses"), "/")
-		candidates = append(candidates, candidate{b + "/models", bearerHdr()})
+		h := http.Header{}
+		if provider != "ollama" {
+			h = bearerHdr()
+		}
+		candidates = append(candidates, candidate{b + "/models", h})
 	default: // anthropic
 		if baseURL == "" {
 			baseURL = "https://api.anthropic.com"

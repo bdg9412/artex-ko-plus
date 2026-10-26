@@ -24,9 +24,10 @@ GITHUB_README_TEMPLATE = "scripts/release-readme.md"
 GITHUB_GUIDE = "docs/FINDING_DEFENSE_INVESTIGATION_KO.md"
 GITHUB_DIAGNOSIS_GUIDE = "docs/OFFENSIVE_DIAGNOSIS_KO.md"
 GITHUB_HUNTING_GUIDE = "docs/AUTONOMOUS_HUNTING_KO.md"
+GITHUB_RELEASE_EVIDENCE = "docs/RELEASE_EVIDENCE_KO.md"
 GITHUB_MARKDOWN = frozenset({
     "README.md", GITHUB_GUIDE, GITHUB_DIAGNOSIS_GUIDE, GITHUB_HUNTING_GUIDE,
-    "docs/defense-ko.md", "docs/defense-en.md",
+    GITHUB_RELEASE_EVIDENCE, "docs/defense-ko.md", "docs/defense-en.md",
 })
 GITHUB_MARKDOWN_PREFIXES = ("skills/", "detections/")
 GITHUB_EXCLUDED_PATH_PREFIXES = ("docs/evidence/", "docs/legacy-assessments/", "screenshots/")
@@ -36,6 +37,7 @@ EXCLUDED_DIRS = frozenset({
     ".playwright-mcp", ".playwright-cli", ".pnpm-store", ".idea", ".vscode", ".next",
     "__pycache__", "node_modules", "release-artifacts", "evidence-local",
     "work", "test-results", "scan-output", "demo-data", "transcripts",
+    "presentation-output",
 })
 EXCLUDED_ROOTS = frozenset({"data", "dist", "bench"})
 EXCLUDED_PATH_PREFIXES = ("web/out/", "server/webui/dist/")
@@ -49,7 +51,7 @@ EXCLUDED_SUFFIXES = (
     ".env", ".har", ".har.json", ".db", ".db-wal", ".db-shm", ".dump",
     ".sqlite", ".sqlite3", ".sqlite-wal", ".sqlite-shm", ".sqlite3-wal",
     ".sqlite3-shm", ".sql.gz", ".sql.bz2", ".sql.xz", ".pem", ".key",
-    ".p12", ".pfx", ".zip", ".tar", ".tar.gz", ".tgz", ".tar.bz2",
+    ".p12", ".pfx", ".zip", ".pptx", ".tar", ".tar.gz", ".tgz", ".tar.bz2",
     ".tbz2", ".tar.xz", ".txz", ".7z", ".rar", ".pyc", ".pyo",
     ".tsbuildinfo", ".swp", ".swo",
 )

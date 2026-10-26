@@ -950,6 +950,10 @@ export const api = {
     profile_id?: number,
     streaming = true, // 用该配置真实的收发模式来测，别让"流式能通、非流式不通"漏到会话里
     session_header_key = "", // 非空=测试请求也带该自定义会话头（值为一次性 session id）
+    cyber_access_program = "", // 非空=Responses API access_programs.cyber
+    max_tokens = 0,
+    invoke_schema = "tgi",
+    prompt_style = "raw",
   ) =>
     // reply = 模型实际回复(已截断);一个字都不回的配置后端直接判失败
     post<{ ok: boolean; error?: string; latency_ms?: number; model?: string; reply?: string }>("/llm/test", {
@@ -963,6 +967,10 @@ export const api = {
       profile_id,
       streaming,
       session_header_key,
+      cyber_access_program,
+      max_tokens,
+      invoke_schema,
+      prompt_style,
     }),
   llmProfiles: () => get<{ profiles: LLMProfile[] }>("/llm/profiles").then((r) => arr(r.profiles)),
   saveLLMProfile: (p: {
@@ -978,11 +986,14 @@ export const api = {
     context_window_k?: number;
     thinking_type?: string; // ""(不发送)|"disabled"|"enabled"
     reasoning_effort?: string; // ""(不发送)|"low"|"medium"|"high"|"xhigh"|"max"
+    cyber_access_program?: "" | "standard" | "daybreak_blue" | "daybreak_red";
     priority?: number; // 轮询顺位，越大越先用
     pool_exclude?: boolean; // true=不作为故障转移目标
     streaming?: boolean; // true(默认)=流式 | false=非流式
     max_tokens?: number; // 单次回复输出上限；0=不发送，由服务端默认值决定
     max_tokens_field?: string; // ""=max_tokens(默认) | "max_completion_tokens"（仅 openai 格式）
+    invoke_schema?: "tgi" | "deepseek"; // Bedrock Marketplace InvokeModel payload/response schema
+    prompt_style?: "raw" | "deepseek" | "qwen" | "llama"; // Bedrock Marketplace prompt template
     session_header_key?: string; // 非空=每次请求带该 HTTP 头，头值=当前会话 session id；""=不发送
     retry?: LLMRetryOverride; // 本配置的重试覆盖；各项留 0 = 跟随全局重试策略
   }) => post<{ id: number }>("/llm/profiles", p),

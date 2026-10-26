@@ -3297,18 +3297,34 @@
       "descEdit": "수정한 뒤 저장을 누르세요. 활성 설정은 저장하면 모든 에이전트에 즉시 적용됩니다.",
       "name": {
         "label": "이름",
-        "placeholder": "예: OpenAI 프로덕션"
+        "placeholder": "예: 기본 진단 모델"
       },
       "format": {
         "label": "형식",
-        "placeholder": "형식 선택"
+        "placeholder": "형식 선택",
+        "ollama": "Ollama (로컬)",
+        "bedrock": "Amazon Bedrock (Claude)",
+        "converse": "Amazon Bedrock (Converse · 범용)",
+        "marketplace": "Amazon Bedrock Marketplace (InvokeModel)"
       },
       "model": {
         "label": "모델",
-        "loadTitle": "API에서 사용 가능한 모델 불러오기"
+        "loadTitle": "API에서 사용 가능한 모델 불러오기",
+        "ollamaHint": "Ollama에 설치된 모델을 선택하거나 정확한 이름을 입력하세요. 모델 목록은 옆의 새로고침 버튼으로 불러올 수 있습니다. 컨텍스트 창은 기본 32K이며 Ollama 서버 설정과 일치시켜야 합니다.",
+        "bedrockHint": "Bedrock에서 사용할 Claude 모델 ID 또는 Claude 추론 프로필 ID를 정확히 입력하세요. 모델 목록은 자동으로 불러오지 않습니다. 이 연동은 Claude 모델을 지원합니다.",
+        "converseHint": "Bedrock Converse를 지원하는 모델 ID 또는 추론 프로필 ID를 입력하세요. GLM 등 특정 모델로 제한하지 않습니다. 모델 목록은 자동으로 불러오지 않습니다.",
+        "marketplaceLabel": "Marketplace 엔드포인트 ARN",
+        "marketplaceHint": "Bedrock → Marketplace deployments에서 배포된 엔드포인트의 전체 arn:aws:sagemaker:… ARN을 입력하세요. 모델 표시 이름이나 기초 모델 ID는 사용할 수 없습니다. 현재 일반 AWS 리전을 지원합니다."
       },
       "baseUrl": {
-        "label": "Base URL (선택)"
+        "label": "Base URL (선택)",
+        "ollamaHint": "Docker Compose 기본 주소입니다. 앱을 호스트에서 직접 실행한다면 http://127.0.0.1:11434/v1 로 바꾸세요.",
+        "bedrockLabel": "Bedrock Base URL (필수)",
+        "bedrockHint": "사용할 리전의 URL을 입력하세요. 예: https://bedrock-runtime.us-east-1.amazonaws.com/anthropic. Bedrock Mantle의 /anthropic URL도 사용할 수 있습니다. 끝에 /v1/messages를 붙이지 마세요.",
+        "converseLabel": "Bedrock Runtime URL (필수)",
+        "converseHint": "사용할 리전의 주소를 입력하세요. 예: https://bedrock-runtime.ap-northeast-2.amazonaws.com. /model 경로는 붙이지 마세요.",
+        "marketplaceLabel": "Bedrock Runtime URL (필수)",
+        "marketplaceHint": "엔드포인트 ARN에서 리전을 읽어 자동 입력합니다. ARN과 같은 리전의 https://bedrock-runtime.<리전>.amazonaws.com 주소여야 합니다. 경로는 붙이지 마세요."
       },
       "proxy": {
         "label": "프록시 (선택)",
@@ -3320,12 +3336,35 @@
         "hint": "헤더 이름을 채우면 매 요청에 이 HTTP 헤더가 실리고, 헤더 값은 <b>현재 세션의 session id</b>로 자동 설정됩니다(chat 세션은 conv-12, worker는 exp3-worker-i87 등). session-id 헤더로 프롬프트 캐시 / 스티키 라우팅을 하는 게이트웨이용입니다. 같은 세션은 여러 턴에서 안정적이고, 다른 세션끼리는 서로 다릅니다. 비우면 보내지 않습니다."
       },
       "apiKey": {
-        "placeholderSet": "설정됨({hint}), 비우면 그대로 유지"
+        "placeholderSet": "설정됨({hint}), 비우면 그대로 유지",
+        "bedrockLabel": "Amazon Bedrock API Key (필수)",
+        "bedrockPlaceholder": "Amazon Bedrock API 키",
+        "bedrockHint": "Amazon Bedrock API 키를 입력하세요. 새 프로필에 필요하며 저장 후에는 마스킹됩니다."
+      },
+      "marketplace": {
+        "region": "엔드포인트 리전: {region}",
+        "hint": "Marketplace 텍스트 모델의 InvokeModel 요청과 응답 형식을 선택하세요. 모델마다 형식이 다를 수 있으므로 배포 화면의 예제와 맞춰야 합니다. 이 설정은 모든 Marketplace 모델 형식을 지원한다는 뜻은 아닙니다.",
+        "schemaLabel": "요청·응답 형식",
+        "schemaTgi": "TGI · inputs / generated_text",
+        "schemaDeepseek": "DeepSeek 기본 · prompt / choices[0].text",
+        "promptLabel": "대화 프롬프트 형식",
+        "promptRaw": "원문 (raw)",
+        "promptDeepseek": "DeepSeek",
+        "promptQwen": "Qwen",
+        "promptLlama": "Llama",
+        "testHint": "연결 테스트는 배포된 엔드포인트를 실제로 한 번 호출하므로 AWS 사용 요금이 발생할 수 있습니다."
+      },
+      "daybreak": {
+        "enabled": "Daybreak 사용",
+        "hint": "끄면 access_programs.cyber를 보내지 않으며 실제 적용은 API 프로젝트 정책을 따릅니다. 켜면 선택한 프로그램을 Responses API 요청과 연결 테스트에 보냅니다. 해당 API 프로젝트의 권한이 필요합니다.",
+        "program": "API 접근 프로그램"
       },
       "rps": "초당 속도 제한",
       "rpm": "분당 속도 제한",
       "cw": "컨텍스트 창(K)",
       "rateHint": "속도 제한 0 = 무제한, 모든 에이전트가 공유합니다. 컨텍스트 창 단위는 K(천 token), 0 = 기본 200K, 상한 1000(즉 1M)입니다. 너무 크게 잡으면 압축이 트리거되지 않습니다.",
+      "rateHintOllama": "속도 제한 0 = 무제한입니다. 컨텍스트 창은 K(천 token) 단위이며 0이면 Ollama 기본값 32K를 사용합니다. Ollama 서버의 컨텍스트 설정과 일치시켜 주세요.",
+      "rateHintMarketplace": "속도 제한 0 = 무제한이며 모든 에이전트가 공유합니다. 컨텍스트 창은 K(천 token) 단위이고 0이면 보수적으로 32K를 적용합니다. 배포한 모델의 실제 컨텍스트 용량에 맞춰 조정하세요.",
       "priority": {
         "label": "순환 우선순위",
         "hint": "숫자가 클수록 먼저 선택됩니다. 활성 설정은 이 값과 무관하게 항상 1순위입니다. 우선순위가 같은 설정은 번갈아 앞에 서서 자연스럽게 할당량을 나눠 씁니다."
@@ -3338,11 +3377,16 @@
       "streaming": {
         "label": "스트리밍 출력 · streaming",
         "hint": "켜면(기본) 스트리밍 SSE로 동작해 실행 중 실시간 진행 상황과 실시간 token 수를 볼 수 있습니다. 끄면 진짜 비스트리밍(stream:false, 완성된 응답을 한 번에 반환)으로 동작해 일부 게이트웨이의 불량 SSE 구현(빈 프레임 / 사고 필드 누락 프레임)을 우회할 수 있지만, 실행 중 실시간 진행 상황을 잃습니다.",
+        "marketplaceHint": "이 Marketplace 연결은 InvokeModel로 한 번에 응답을 받습니다. 스트리밍은 사용할 수 없습니다.",
+        "converseHint": "현재 Converse 연결은 응답을 한 번에 받습니다. 실행 중 실시간 출력은 사용할 수 없습니다.",
         "aria": "스트리밍 출력"
       },
       "maxTokens": {
         "label": "출력 상한 · max tokens",
-        "hint": "한 번의 응답에서 최대 몇 token까지 생성할지로, 매 요청에 함께 보냅니다. 0(기본) = 이 필드를 보내지 않고 서버 기본값을 따릅니다. 이는 위의 「컨텍스트 창」과는 다릅니다. 그쪽은 모델 전체 용량으로, 로컬에서 압축 임계값을 계산할 때만 씁니다. 너무 작게 잡으면 추론 모델이 사고 단계에서 잘려 한 글자도 답하지 못합니다."
+        "hint": "한 번의 응답에서 최대 몇 token까지 생성할지로, 매 요청에 함께 보냅니다. 0(기본) = 이 필드를 보내지 않고 서버 기본값을 따릅니다. 이는 위의 「컨텍스트 창」과는 다릅니다. 그쪽은 모델 전체 용량으로, 로컬에서 압축 임계값을 계산할 때만 씁니다. 너무 작게 잡으면 추론 모델이 사고 단계에서 잘려 한 글자도 답하지 못합니다.",
+        "bedrockHint": "Bedrock Claude의 한 번의 응답에서 생성할 최대 token 수입니다. 0으로 두면 요청에 max_tokens: 4096을 명시해 보냅니다. 컨텍스트 창과는 별개입니다.",
+        "converseHint": "Converse 요청의 최대 출력 token 수입니다. 0이면 안전 기본값 4096을 사용합니다. 컨텍스트 창과는 별개입니다.",
+        "marketplaceHint": "한 번의 응답에서 생성할 최대 token 수입니다. 0이면 2048을 명시적으로 보냅니다. 실제 필드 이름은 위에서 선택한 요청 형식에 맞춰 전송됩니다."
       },
       "maxTokensField": {
         "label": "상한 필드 이름",
@@ -3353,7 +3397,10 @@
       "maxTokensFieldHint": {
         "openai": "상한을 어느 키로 보낼지입니다. max_tokens가 기본이고 대부분의 호환 게이트웨이는 이것만 인식합니다. 반면 OpenAI 공식 추론 모델(o 계열 / GPT-5)은 max_completion_tokens만 인식하고, max_tokens를 받으면 바로 unsupported_parameter 오류를 냅니다.",
         "anthropic": "openai 형식에서만 선택할 수 있습니다. Anthropic의 필드 이름은 max_tokens로 고정입니다.",
-        "openai-responses": "openai 형식에서만 선택할 수 있습니다. Responses API의 필드 이름은 max_output_tokens로 고정입니다."
+        "openai-responses": "openai 형식에서만 선택할 수 있습니다. Responses API의 필드 이름은 max_output_tokens로 고정입니다.",
+        "ollama": "Ollama는 기본 max_tokens 필드를 사용합니다.",
+        "bedrock": "Bedrock Claude Messages API는 max_tokens 필드를 사용합니다.",
+        "bedrock-converse": "Bedrock Converse는 inferenceConfig.maxTokens를 사용합니다."
       },
       "thinkingType": {
         "label": "사고 스위치 · thinking.type",
@@ -3386,6 +3433,9 @@
         "unknown": "알 수 없음",
         "testError": "테스트 오류: {msg}",
         "nameModelRequired": "이름과 모델을 입력하세요",
+        "bedrockCredentialsRequired": "Bedrock Base URL과 API 키를 입력하세요",
+        "converseCredentialsRequired": "Bedrock 모델 ID, Runtime URL, API 키를 입력하세요",
+        "marketplaceCredentialsRequired": "전체 Marketplace 엔드포인트 ARN, 같은 리전의 Runtime URL, Bedrock API 키를 입력하세요",
         "created": "새로 만들었습니다: {name}(카드에서 「활성으로 설정」을 눌러 사용)",
         "savedActive": "저장했습니다. 활성 설정은 즉시 적용되며 재시작이 필요 없습니다",
         "saved": "저장했습니다",
