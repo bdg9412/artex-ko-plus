@@ -12,7 +12,7 @@
 
 AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-ko](https://github.com/jiwoochris/artex-ko)를 기반으로 한 보안 검증 프로젝트입니다. 허가된 자산에서 찾은 취약점을 출발점으로 공격·탐지 시나리오를 설계하고, 실제 실행 로그로 탐지·차단 여부를 검증하며, 과거 로그에서 관련 행동을 조사합니다. 별도의 Defensive 자율헌팅은 입력한 취약점·공격 기법을 조사하고 허용한 Splunk 로그에서 관련 근거를 찾습니다.
 
-## 모델 선택과 출력 언어
+## 모델 선택 (기존 환경에서 Ollama, AWS Bedrock 호출 기능 확장)
 
 **시스템 → LLM → 새 프로필**에서 모델 연결을 직접 선택할 수 있습니다. 화면에서 제공하는 형식은 **Anthropic**, **OpenAI (Chat Completions)**, **OpenAI (Responses API)**, **Ollama**, **Amazon Bedrock Converse**입니다. 프로필마다 모델 ID와 연결 주소를 지정할 수 있으며, 여러 프로필을 저장해 작업의 **LLM 설정 체인**에서 선택할 수도 있습니다.  
   
