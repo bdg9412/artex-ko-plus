@@ -18,7 +18,7 @@ AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-
 
 ![새 프로필의 LLM 제공자 선택 목록](docs/guide-images/llm-model-selection-20261026.jpg)
 
-아래는 로컬 환경에 **이미 저장된** Ollama와 Amazon Bedrock Converse 프로필의 화면입니다. 두 프로필 모두 캡처 시점에 `정상`으로 표시됐으며, 인증 정보는 이미지에 포함하지 않았습니다.
+아래는 로컬 환경에 **이미 저장된** Ollama와 Amazon Bedrock Converse 프로필의 화면입니다. 두 프로필 모두 캡처 시점에 `정상`으로 표시됐으며, Bedrock의 경우에는 opus, Ollama는 qwen, deepseek-rl으로 호출 및 진단을 수행하였습니다. ollama는 컴퓨팅 한계로 9B정도의 모델로 수행하여 정확한 진단이 어려웠지만, Bedrock은 취약점을 잘 찾는 것을 확인할 수 있었습니다.
 
 ![저장된 Ollama·Bedrock 프로필 상태](docs/guide-images/llm-ollama-bedrock-status-20261026.jpg)
 
