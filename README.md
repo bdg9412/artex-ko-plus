@@ -1,6 +1,6 @@
 <div align="center">
 
-# AegisLoop
+# AegisLoop : ARTEX-KO Plus
 
 **취약점 발견부터 방어 검증·침해 조사·자율헌팅까지**
 
