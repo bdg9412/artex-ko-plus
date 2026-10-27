@@ -2114,6 +2114,15 @@ func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
 
+	// OrcaRouter has its own discovery contract: the same origin serves both the
+	// chat catalog (?capability=chat) and the parser that drops non-chat records.
+	// Keep it out of the OpenAI candidate ladder so a non-chat model can never
+	// leak into the selector through a fallback path.
+	if provider == agent.OrcaRouterProviderID {
+		s.listOrcaRouterModels(w, r, baseURL, apiKey, req.Proxy)
+		return
+	}
+
 	// Candidate endpoints to try in order. Some Anthropic-compatible providers
 	// (e.g. DeepSeek) implement /v1/messages under an /anthropic path but expose
 	// the model list only on their OpenAI-format path — so for anthropic we fall
@@ -2228,6 +2237,51 @@ func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 		lastErr = errMgmtNoModelList
 	}
 	writeJSON(w, 200, map[string]any{"ok": false, "error": lastErr})
+}
+
+// listOrcaRouterModels implements model discovery for the named OrcaRouter
+// provider. The server holds the key (it is never sent to the browser), asks the
+// configured origin for the authoritative chat catalog, and returns only the
+// IDs the chat adapter can speak. A failed discovery returns an explicit error
+// so the UI can show its verified seed as degraded instead of an empty list.
+func (s *Server) listOrcaRouterModels(w http.ResponseWriter, r *http.Request, baseURL, apiKey, proxy string) {
+	transport := &http.Transport{}
+	if p := strings.TrimSpace(proxy); p != "" {
+		if pu, err := url.Parse(p); err == nil {
+			transport.Proxy = http.ProxyURL(pu)
+		}
+	}
+	client := &http.Client{Transport: transport, Timeout: 20 * time.Second}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet,
+		agent.OrcaRouterModelsURL(baseURL, "chat"), nil)
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "error": errMgmtBuildReqFail + err.Error()})
+		return
+	}
+	req.Header.Set("Accept", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "error": errMgmtReqFail + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		writeJSON(w, 200, map[string]any{
+			"ok":    false,
+			"error": fmt.Sprintf(errMgmtAPIReturned, resp.StatusCode, string(body[:min(len(body), 512)])),
+		})
+		return
+	}
+	models, err := agent.ParseOrcaRouterCatalog(body)
+	if err != nil {
+		writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+		return
+	}
+	writeJSON(w, 200, map[string]any{"ok": true, "models": models})
 }
 
 // --- prompt template helpers (Go text/template + catalog 白名单) ---

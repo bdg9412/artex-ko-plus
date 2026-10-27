@@ -1026,7 +1026,7 @@ export interface NotificationDelivery {
 export interface LLMProfile {
   id: string;
   name: string;
-  format: "openai" | "anthropic" | "openai-responses" | "ollama" | "bedrock" | "bedrock-converse" | "bedrock-marketplace";
+  format: "openai" | "anthropic" | "openai-responses" | "ollama" | "bedrock" | "bedrock-converse" | "bedrock-marketplace" | "orcarouter";
   base_url?: string;
   proxy?: string;
   model: string;
