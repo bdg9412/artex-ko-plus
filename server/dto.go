@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/ollamaendpoint"
 	"github.com/Autumn-27/artex/traffic"
 )
 
@@ -586,22 +587,23 @@ func agentDTOs(in []*db.Agent) []AgentDTO {
 // ---- LLMProfile (frontend "LLMProfile") — string id ----
 
 type LLMProfileDTO struct {
-	ID                 string  `json:"id"`
-	Name               string  `json:"name"`
-	Format             string  `json:"format"`
-	BaseURL            string  `json:"base_url,omitempty"`
-	Proxy              string  `json:"proxy,omitempty"`
-	Model              string  `json:"model"`
-	InvokeSchema       string  `json:"invoke_schema,omitempty"`
-	PromptStyle        string  `json:"prompt_style,omitempty"`
-	APIKeyHint         string  `json:"api_key_hint,omitempty"`
-	RatePerSecond      float64 `json:"rate_per_second"`
-	RatePerMinute      float64 `json:"rate_per_minute"`
-	ContextWindowK     int     `json:"context_window_k"`
-	ThinkingType       string  `json:"thinking_type"`
-	ReasoningEffort    string  `json:"reasoning_effort"`
-	CyberAccessProgram string  `json:"cyber_access_program"`
-	IsDefault          bool    `json:"is_default"`
+	OllamaRemote       ollamaendpoint.Options `json:"ollama_remote,omitempty"`
+	ID                 string                 `json:"id"`
+	Name               string                 `json:"name"`
+	Format             string                 `json:"format"`
+	BaseURL            string                 `json:"base_url,omitempty"`
+	Proxy              string                 `json:"proxy,omitempty"`
+	Model              string                 `json:"model"`
+	InvokeSchema       string                 `json:"invoke_schema,omitempty"`
+	PromptStyle        string                 `json:"prompt_style,omitempty"`
+	APIKeyHint         string                 `json:"api_key_hint,omitempty"`
+	RatePerSecond      float64                `json:"rate_per_second"`
+	RatePerMinute      float64                `json:"rate_per_minute"`
+	ContextWindowK     int                    `json:"context_window_k"`
+	ThinkingType       string                 `json:"thinking_type"`
+	ReasoningEffort    string                 `json:"reasoning_effort"`
+	CyberAccessProgram string                 `json:"cyber_access_program"`
+	IsDefault          bool                   `json:"is_default"`
 	// 轮询(故障转移)参数：priority 越大越先被选中(激活配置恒为链首)；
 	// pool_exclude=true 则不作为故障转移目标，但仍可被 agent/任务显式绑定。
 	Priority    int  `json:"priority"`
@@ -624,6 +626,7 @@ type LLMProfileDTO struct {
 
 func llmProfileDTO(p *db.LLMProfile) LLMProfileDTO {
 	return LLMProfileDTO{
+		OllamaRemote:       p.OllamaRemote,
 		ID:                 i64s(p.ID),
 		Name:               p.Name,
 		Format:             p.Format,

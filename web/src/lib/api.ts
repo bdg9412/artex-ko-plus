@@ -1,3 +1,4 @@
+import type { OllamaRemoteOptions, OllamaStatus } from "./types";
 // Real backend client. /api/* is proxied to the Go backend (next.config rewrites).
 // Returns the domain types in lib/types.ts. Shapes match the backend handlers;
 // a few fields the backend serializes differently (e.g. created_at as a unix int)
@@ -954,6 +955,7 @@ export const api = {
     max_tokens = 0,
     invoke_schema = "tgi",
     prompt_style = "raw",
+    ollama_remote?: OllamaRemoteOptions,
   ) =>
     // reply = 模型实际回复(已截断);一个字都不回的配置后端直接判失败
     post<{ ok: boolean; error?: string; latency_ms?: number; model?: string; reply?: string }>("/llm/test", {
@@ -971,12 +973,14 @@ export const api = {
       max_tokens,
       invoke_schema,
       prompt_style,
+      ollama_remote,
     }),
   llmProfiles: () => get<{ profiles: LLMProfile[] }>("/llm/profiles").then((r) => arr(r.profiles)),
   saveLLMProfile: (p: {
     id?: number; // omit/0 = create; set = update that profile
     name: string;
     format: string;
+    ollama_remote?: OllamaRemoteOptions;
     model: string;
     base_url?: string;
     proxy?: string;
@@ -1006,14 +1010,31 @@ export const api = {
   // 全局重试策略（五层各自的次数+间隔）。全 0 = 全部走内置默认。
   llmRetryPolicy: () => get<LLMRetryPolicy>("/llm/retry-policy"),
   saveLLMRetryPolicy: (p: LLMRetryPolicy) => post<LLMRetryPolicy>("/llm/retry-policy", p),
-  fetchLLMModels: (provider: string, base_url: string, api_key: string, proxy = "", profile_id?: number) =>
+  fetchLLMModels: (
+    provider: string,
+    base_url: string,
+    api_key: string,
+    proxy = "",
+    profile_id?: number,
+    ollama_remote?: OllamaRemoteOptions,
+  ) =>
     post<{ ok: boolean; error?: string; models?: string[] }>("/llm/models", {
       provider,
       base_url,
       api_key,
       proxy,
       profile_id,
+      ollama_remote,
     }),
+  ollamaStatus: (p: {
+    provider: string;
+    model: string;
+    base_url: string;
+    api_key: string;
+    proxy: string;
+    profile_id?: number;
+    ollama_remote: OllamaRemoteOptions;
+  }) => post<{ ok: boolean; error?: string; status?: OllamaStatus }>("/llm/ollama/status", p),
 
   // ---- agents ----
   agents: () => get<{ agents: Agent[] }>("/agents").then((r) => arr(r.agents)),

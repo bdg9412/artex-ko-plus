@@ -40,6 +40,8 @@ import {
   type SelectorOptions,
 } from "@/lib/orcarouter-catalog";
 import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride } from "@/lib/types";
+import { canKeepRemoteOllamaToken, isOllamaFormat, remoteOllamaOptions, remoteOllamaURL } from "@/lib/ollama-profile";
+import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride, OllamaStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 import { ProfileRetryFields, RetryPolicyPanel, ZERO_OVERRIDE } from "./_components/retry";
@@ -64,6 +66,7 @@ const MODEL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
   openai: "claude-opus-4-8",
   "openai-responses": "claude-opus-4-8",
   ollama: "예: llama3.2",
+  "ollama-remote": "예: qwen3:8b",
   bedrock: "us.anthropic.claude-sonnet-4-6",
   "bedrock-converse": "예: zai.glm-4.7 또는 사용 중인 Bedrock 모델 ID",
   "bedrock-marketplace": "arn:aws:sagemaker:us-east-1:123456789012:endpoint/my-model",
@@ -74,6 +77,7 @@ const BASE_URL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
   openai: "https://api.openai.com/v1",
   "openai-responses": "https://api.openai.com/v1",
   ollama: OLLAMA_DOCKER_URL,
+  "ollama-remote": "https://ollama.lab.example/v1",
   bedrock: BEDROCK_BASE_URL_EXAMPLE,
   "bedrock-converse": BEDROCK_CONVERSE_BASE_URL_EXAMPLE,
   "bedrock-marketplace": MARKETPLACE_BASE_URL_EXAMPLE,
@@ -84,6 +88,7 @@ const BASE_URL_LABEL_KEYS = {
   openai: "profile.baseUrl.label",
   "openai-responses": "profile.baseUrl.label",
   ollama: "profile.baseUrl.label",
+  "ollama-remote": "profile.remote.urlLabel",
   bedrock: "profile.baseUrl.bedrockLabel",
   "bedrock-converse": "profile.baseUrl.converseLabel",
   "bedrock-marketplace": "profile.baseUrl.marketplaceLabel",
@@ -94,6 +99,7 @@ const MAX_TOKENS_HINT_KEYS = {
   openai: "profile.maxTokens.hint",
   "openai-responses": "profile.maxTokens.hint",
   ollama: "profile.maxTokens.hint",
+  "ollama-remote": "profile.maxTokens.hint",
   bedrock: "profile.maxTokens.bedrockHint",
   "bedrock-converse": "profile.maxTokens.converseHint",
   "bedrock-marketplace": "profile.maxTokens.marketplaceHint",
@@ -104,6 +110,7 @@ const RATE_HINT_KEYS = {
   openai: "profile.rateHint",
   "openai-responses": "profile.rateHint",
   ollama: "profile.rateHintOllama",
+  "ollama-remote": "profile.rateHintOllama",
   bedrock: "profile.rateHint",
   "bedrock-converse": "profile.rateHint",
   "bedrock-marketplace": "profile.rateHintMarketplace",
@@ -418,6 +425,11 @@ function ProfileSheet({
   const [baseUrl, setBaseUrl] = React.useState("");
   const [proxy, setProxy] = React.useState("");
   const [apiKey, setApiKey] = React.useState("");
+  const [remoteOptions, setRemoteOptions] = React.useState(remoteOllamaOptions());
+  const [remoteStatus, setRemoteStatus] = React.useState<OllamaStatus | null>(null);
+  const [checkingStatus, setCheckingStatus] = React.useState(false);
+  const statusRequest = React.useRef(0);
+  const lastStatusInput = React.useRef("");
   const [keyHint, setKeyHint] = React.useState("");
   const [rps, setRps] = React.useState("0");
   const [rpm, setRpm] = React.useState("0");
@@ -495,6 +507,8 @@ function ProfileSheet({
     setSessionHeaderKey(profile?.session_header_key ?? "");
     setRetry(profile?.retry ?? ZERO_OVERRIDE);
     setApiKey("");
+    setRemoteOptions(remoteOllamaOptions(profile?.ollama_remote));
+    setRemoteStatus(null);
     setKeyHint(profile?.api_key_hint ?? "");
     setTestError("");
     setModels([]);
@@ -502,6 +516,16 @@ function ProfileSheet({
   }, [open, profile]);
 
   const profileId = profile ? Number(profile.id) : undefined;
+  const remote = format === "ollama-remote";
+  const ollama = isOllamaFormat(format);
+  const statusInput = JSON.stringify([baseUrl, apiKey, proxy, model, remoteOptions, format, open]);
+  React.useEffect(() => {
+    if (lastStatusInput.current === statusInput) return;
+    lastStatusInput.current = statusInput;
+    statusRequest.current++;
+    setRemoteStatus(null);
+    setCheckingStatus(false);
+  }, [statusInput]);
   const marketplace = format === "bedrock-marketplace";
   const converse = format === "bedrock-converse";
   const isOrcaRouter = format === "orcarouter";
@@ -510,10 +534,22 @@ function ProfileSheet({
   let apiKeyPlaceholder = "sk-…";
   if (isOrcaRouter) apiKeyPlaceholder = "sk-orca-…";
   else if (bedrockKeyFormat) apiKeyPlaceholder = t("profile.apiKey.bedrockPlaceholder");
+  let apiKeyPlaceholder = "sk-…";
+  if (format === "bedrock" || converse || marketplace) apiKeyPlaceholder = t("profile.apiKey.bedrockPlaceholder");
+  if (remote) apiKeyPlaceholder = t("profile.remote.tokenPlaceholder");
+  let apiKeyLabel = "API Key";
+  if (format === "bedrock" || converse || marketplace) apiKeyLabel = t("profile.apiKey.bedrockLabel");
+  if (remote) apiKeyLabel = t("profile.remote.tokenLabel");
+  const responseTestLabel = remote ? t("profile.remote.responseTest") : t("profile.testConnection");
+  let loadedStatusLabel = t("profile.remote.unknown");
+  if (remoteStatus?.running_known)
+    loadedStatusLabel = t(remoteStatus.model_loaded ? "profile.remote.yes" : "profile.remote.no");
 
   function changeFormat(next: LLMProfile["format"]) {
     if (next === format) return;
     setTestError("");
+    setRemoteOptions(remoteOllamaOptions());
+    setRemoteStatus(null);
     setFormat(next);
     setModel("");
     setBaseUrl(next === "ollama" ? OLLAMA_DOCKER_URL : "");
@@ -532,6 +568,7 @@ function ProfileSheet({
       return;
     }
     if (next === "ollama") {
+    if (isOllamaFormat(next)) {
       setCw("32");
       setThinkingType(NONE);
       setEffort(NONE);
@@ -548,11 +585,16 @@ function ProfileSheet({
 
   async function loadModels() {
     if (loadingModels) return;
+    const remoteProblem = remoteError();
+    if (remoteProblem) {
+      setTestError(remoteProblem);
+      return;
+    }
     setLoadingModels(true);
     setModels([]);
     setOrcaCatalog(null);
     try {
-      const r = await api.fetchLLMModels(format, baseUrl, apiKey, proxy, profileId);
+      const r = await api.fetchLLMModels(format, baseUrl, apiKey, proxy, profileId, remote ? remoteOptions : undefined);
       if (r.ok && r.models && r.models.length > 0) {
         setModels(r.models);
         if (isOrcaRouter) setOrcaCatalog(optionsFromIDs(r.models));
@@ -582,10 +624,61 @@ function ProfileSheet({
     setModel(ORCAROUTER_DEFAULT_MODEL);
     setModels([]);
     setOrcaCatalog(null);
+  function remoteError() {
+    if (!remote) return "";
+    if (!remoteOllamaURL(baseUrl)) return t("profile.remote.invalidUrl");
+    if (remoteOptions.auth_mode === "bearer" && !apiKey.trim() && !canKeepRemoteOllamaToken(profile, baseUrl))
+      return t("profile.remote.tokenRequired");
+    if (
+      remoteOptions.max_concurrent < 1 ||
+      remoteOptions.max_concurrent > 8 ||
+      remoteOptions.queue_timeout_seconds < 1 ||
+      remoteOptions.queue_timeout_seconds > 3600 ||
+      remoteOptions.request_timeout_seconds < 5 ||
+      remoteOptions.request_timeout_seconds > 7200
+    )
+      return t("profile.remote.invalidLimits");
+    return "";
+  }
+
+  async function checkStatus() {
+    const error = remoteError();
+    if (error) {
+      setTestError(error);
+      return;
+    }
+    if (checkingStatus) return;
+    setCheckingStatus(true);
+    const request = ++statusRequest.current;
+    setTestError("");
+    setRemoteStatus(null);
+    try {
+      const result = await api.ollamaStatus({
+        provider: format,
+        model,
+        base_url: baseUrl,
+        api_key: apiKey,
+        proxy,
+        profile_id: profileId,
+        ollama_remote: remoteOptions,
+      });
+      if (request !== statusRequest.current) return;
+      if (result.ok && result.status) setRemoteStatus(result.status);
+      else setTestError(result.error ?? t("profile.toast.unknown"));
+    } catch (error) {
+      if (request === statusRequest.current) setTestError((error as Error).message);
+    } finally {
+      if (request === statusRequest.current) setCheckingStatus(false);
+    }
   }
 
   async function testConnection() {
     if (testing) return;
+    const remoteProblem = remoteError();
+    if (remoteProblem) {
+      setTestError(remoteProblem);
+      return;
+    }
     setTestError("");
     if (marketplace && (!MARKETPLACE_ARN.test(model.trim()) || !baseUrl.trim() || (!apiKey.trim() && !keyHint))) {
       const error = t("profile.toast.marketplaceCredentialsRequired");
@@ -614,8 +707,8 @@ function ProfileSheet({
         baseUrl,
         apiKey,
         marketplace ? "" : proxy,
-        format === "ollama" || singleResponse ? "" : toStore(thinkingType),
-        format === "ollama" || singleResponse ? "" : toStore(effort),
+        ollama || singleResponse ? "" : toStore(thinkingType),
+        ollama || singleResponse ? "" : toStore(effort),
         profileId,
         singleResponse ? false : streaming,
         marketplace ? "" : sessionHeaderKey.trim(),
@@ -623,6 +716,7 @@ function ProfileSheet({
         Math.max(0, Number(maxTokens) || 0),
         marketplace ? invokeSchema : "",
         marketplace ? promptStyle : "",
+        remote ? remoteOptions : undefined,
       );
       // 回复内容一并展示：看得见模型确实说了话，才算和会话里跑通是一回事。
       if (r.ok)
@@ -644,6 +738,11 @@ function ProfileSheet({
   }
 
   async function save() {
+    const remoteProblem = remoteError();
+    if (remoteProblem) {
+      setTestError(remoteProblem);
+      return;
+    }
     if (!name.trim() || !model.trim()) {
       toast.error(t("profile.toast.nameModelRequired"));
       return;
@@ -668,12 +767,13 @@ function ProfileSheet({
         model: model.trim(),
         base_url: baseUrl.trim(),
         proxy: marketplace ? "" : proxy.trim(),
-        api_key: apiKey,
+        api_key: remote && remoteOptions.auth_mode === "none" ? "" : apiKey,
+        ollama_remote: remote ? remoteOptions : undefined,
         rate_per_second: Number(rps) || 0,
         rate_per_minute: Number(rpm) || 0,
         context_window_k: Number(cw) || 0,
-        thinking_type: format === "ollama" || singleResponse ? "" : toStore(thinkingType),
-        reasoning_effort: format === "ollama" || singleResponse ? "" : toStore(effort),
+        thinking_type: ollama || singleResponse ? "" : toStore(thinkingType),
+        reasoning_effort: ollama || singleResponse ? "" : toStore(effort),
         cyber_access_program: daybreakRequestProgram(format, daybreakEnabled, cyberProgram),
         priority: Number(priority) || 0,
         pool_exclude: poolExclude,
@@ -737,6 +837,7 @@ function ProfileSheet({
                   <SelectItem value="openai">OpenAI (Chat Completions)</SelectItem>
                   <SelectItem value="openai-responses">OpenAI (Responses API)</SelectItem>
                   <SelectItem value="ollama">{t("profile.format.ollama")}</SelectItem>
+                  <SelectItem value="ollama-remote">{t("profile.format.ollamaRemote")}</SelectItem>
                   <SelectItem value="bedrock-converse">{t("profile.format.converse")}</SelectItem>
                   <SelectItem value="orcarouter">{t("profile.format.orcarouter")}</SelectItem>
                 </SelectContent>
@@ -824,9 +925,7 @@ function ProfileSheet({
             )}
           </div>
 
-          {format === "ollama" && (
-            <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.ollamaHint")}</p>
-          )}
+          {ollama && <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.ollamaHint")}</p>}
           {format === "bedrock" && (
             <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.bedrockHint")}</p>
           )}
@@ -895,6 +994,87 @@ function ProfileSheet({
             {marketplace && <p className="text-muted-foreground text-xs">{t("profile.baseUrl.marketplaceHint")}</p>}
           </div>
 
+          {remote && (
+            <div className="grid gap-3 rounded-md border p-3">
+              <p className="text-muted-foreground text-xs">{t("profile.remote.hint")}</p>
+              <div className="grid gap-2">
+                <Label htmlFor="p-remote-auth">{t("profile.remote.authLabel")}</Label>
+                <Select
+                  value={remoteOptions.auth_mode}
+                  onValueChange={(value) => {
+                    setRemoteOptions({ ...remoteOptions, auth_mode: value as "none" | "bearer" });
+                    setApiKey("");
+                    setKeyHint("");
+                  }}
+                >
+                  <SelectTrigger id="p-remote-auth">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t("profile.remote.authNone")}</SelectItem>
+                    <SelectItem value="bearer">{t("profile.remote.authBearer")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-2">
+                  <Label htmlFor="p-remote-concurrency">{t("profile.remote.concurrency")}</Label>
+                  <Input
+                    id="p-remote-concurrency"
+                    type="number"
+                    min={1}
+                    max={8}
+                    value={remoteOptions.max_concurrent}
+                    onChange={(event) =>
+                      setRemoteOptions({ ...remoteOptions, max_concurrent: Number(event.target.value) })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="p-remote-queue">{t("profile.remote.queueTimeout")}</Label>
+                  <Input
+                    id="p-remote-queue"
+                    type="number"
+                    min={1}
+                    max={3600}
+                    value={remoteOptions.queue_timeout_seconds}
+                    onChange={(event) =>
+                      setRemoteOptions({ ...remoteOptions, queue_timeout_seconds: Number(event.target.value) })
+                    }
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="p-remote-timeout">{t("profile.remote.requestTimeout")}</Label>
+                  <Input
+                    id="p-remote-timeout"
+                    type="number"
+                    min={5}
+                    max={7200}
+                    value={remoteOptions.request_timeout_seconds}
+                    onChange={(event) =>
+                      setRemoteOptions({ ...remoteOptions, request_timeout_seconds: Number(event.target.value) })
+                    }
+                  />
+                </div>
+              </div>
+              <p className="text-muted-foreground text-xs">{t("profile.remote.limitsHint")}</p>
+              <Button type="button" variant="outline" onClick={checkStatus} disabled={checkingStatus}>
+                {checkingStatus ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
+                {t("profile.remote.checkStatus")}
+              </Button>
+              <p className="text-muted-foreground text-xs">{t("profile.remote.statusHint")}</p>
+              {remoteStatus && (
+                <p role="status" className="text-sm">
+                  {t("profile.remote.statusResult", {
+                    time: new Date(remoteStatus.checked_at).toLocaleString(),
+                    available: t(remoteStatus.model_available ? "profile.remote.yes" : "profile.remote.no"),
+                    loaded: loadedStatusLabel,
+                  })}
+                </p>
+              )}
+            </div>
+          )}
+
           {!marketplace && (
             <div className="grid gap-2">
               <Label htmlFor="p-proxy">{t("profile.proxy.label")}</Label>
@@ -925,15 +1105,17 @@ function ProfileSheet({
             </div>
           )}
 
-          {format !== "ollama" && (
+          {(!ollama || (remote && remoteOptions.auth_mode === "bearer")) && (
             <div className="grid gap-2">
-              <Label htmlFor="p-api-key">
-                {format === "bedrock" || converse || marketplace ? t("profile.apiKey.bedrockLabel") : "API Key"}
-              </Label>
+              <Label htmlFor="p-api-key">{apiKeyLabel}</Label>
               <Input
                 id="p-api-key"
                 type="password"
-                placeholder={keyHint ? t("profile.apiKey.placeholderSet", { hint: keyHint }) : apiKeyPlaceholder}
+                placeholder={
+                  keyHint && (!remote || canKeepRemoteOllamaToken(profile, baseUrl))
+                    ? t("profile.apiKey.placeholderSet", { hint: keyHint })
+                    : apiKeyPlaceholder
+                }
                 value={apiKey}
                 onChange={(e) => {
                   setApiKey(e.target.value);
@@ -1041,7 +1223,7 @@ function ProfileSheet({
                 max={1000}
                 value={cw}
                 onChange={(e) => setCw(e.target.value)}
-                placeholder={format === "ollama" || marketplace ? "32" : "200"}
+                placeholder={ollama || marketplace ? "32" : "200"}
               />
             </div>
           </div>
@@ -1136,7 +1318,7 @@ function ProfileSheet({
             )}
           </div>
 
-          {format !== "ollama" && !singleResponse && (
+          {!ollama && !singleResponse && (
             <div className="grid gap-3 rounded-lg border p-3">
               <div className="flex items-center justify-between gap-4">
                 <div className="grid gap-0.5">
@@ -1192,7 +1374,7 @@ function ProfileSheet({
           <div className="flex gap-2 px-4 py-3">
             <Button variant="outline" onClick={testConnection} disabled={testing}>
               {testing ? <Loader2Icon className="animate-spin" /> : <PlugZapIcon />}
-              {testing ? t("profile.testing") : t("profile.testConnection")}
+              {testing ? t("profile.testing") : responseTestLabel}
             </Button>
             <Button onClick={save} disabled={saving} className="flex-1">
               {saving && <Loader2Icon className="animate-spin" />}
@@ -1225,7 +1407,7 @@ export default function LLMPage() {
   // 一个配置在卡片上显示的「是否正常」。没填 Key 的配置根本发不出请求，比熔断更该先说。
   const healthOf = React.useCallback(
     (p: LLMProfile, m?: LLMPoolMember): Health => {
-      if (p.format !== "ollama" && !p.api_key_hint) {
+      if ((!isOllamaFormat(p.format) || p.ollama_remote?.auth_mode === "bearer") && !p.api_key_hint) {
         return {
           label: t("health.noKey.label"),
           cls: "border-muted-foreground/40 text-muted-foreground",
@@ -1249,7 +1431,11 @@ export default function LLMPage() {
           hint: m.last_error,
         };
       }
-      return { label: t("health.ok"), cls: "border-emerald-500/50 text-emerald-600 dark:text-emerald-400" };
+      return {
+        label: t(p.format === "ollama-remote" ? "health.noKnownError" : "health.ok"),
+        cls: "border-emerald-500/50 text-emerald-600 dark:text-emerald-400",
+        hint: p.format === "ollama-remote" ? t("health.remoteHint") : undefined,
+      };
     },
     [t],
   );

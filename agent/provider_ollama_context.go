@@ -65,7 +65,7 @@ func newOllamaContextProvider(base llm.Provider, cfg Config, llmClient *http.Cli
 	// are not model calls and must not overwrite those captures.
 	probeTransport := llmClient.Transport
 	if transport, ok := probeTransport.(quotaAwareTransport); ok {
-		probeTransport = transport.base
+		probeTransport = ollamaAuthTransport{base: transport.base, token: cfg.ollamaBearerToken()}
 	}
 	return &ollamaContextProvider{
 		Provider:   base,

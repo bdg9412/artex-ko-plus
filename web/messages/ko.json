@@ -3246,7 +3246,9 @@
       "tripped": "서킷 차단됨",
       "trippedCooldown": "서킷 차단됨 · {cooldown}",
       "degraded": "비정상 · 실패 {fails}회",
-      "ok": "정상"
+      "ok": "정상",
+      "noKnownError": "알려진 오류 없음",
+      "remoteHint": "장애 차단기 상태입니다. 실시간 연결 여부는 프로필의 서버 상태 확인에서 조회하세요."
     },
     "pool": {
       "title": "LLM 순환 · 장애 전환",
@@ -3307,6 +3309,7 @@
         "converse": "Amazon Bedrock (Converse · 범용)",
         "marketplace": "Amazon Bedrock Marketplace (InvokeModel)",
         "orcarouter": "OrcaRouter Cyber Inference"
+        "ollamaRemote": "Ollama (원격 서버)"
       },
       "model": {
         "label": "모델",
@@ -3452,6 +3455,28 @@
         "defaultLabel": "기본 모델",
         "cyberLabel": "보안 팀 권장 cyber 모델(비즈니스 검증 후 사용 가능)",
         "cyberHint": "사용 가능한 모델은 계정의 실제 카탈로그에서 확인합니다. 목록을 새로고침하면 현재 키로 호출 가능한 모델만 표시됩니다."
+      "remote": {
+        "urlLabel": "원격 Ollama 서버 URL",
+        "hint": "별도 PC 또는 사설망의 Ollama 주소를 입력하세요. Bearer 인증은 앞단 게이트웨이가 검증하며 HTTPS 사용을 권장합니다. 인증서 검증은 유지됩니다.",
+        "authLabel": "인증 방식",
+        "authNone": "인증 없음 (사설망/VPN)",
+        "authBearer": "Bearer 토큰 (게이트웨이)",
+        "tokenLabel": "게이트웨이 Bearer 토큰",
+        "concurrency": "동시 요청 수",
+        "queueTimeout": "대기 제한 (초)",
+        "requestTimeout": "응답 제한 (초)",
+        "limitsHint": "기본값: 동시 1개, 대기 120초, 응답 600초. 같은 서버의 모든 원격 프로필이 실행 한도를 공유합니다.",
+        "checkStatus": "서버 상태 확인",
+        "statusHint": "설치 모델과 실행 상태만 조회합니다. 모델 로딩·다운로드·생성을 요청하지 않습니다. 응답 테스트는 실제 모델을 호출하며 로딩이 발생할 수 있습니다.",
+        "responseTest": "응답 테스트",
+        "invalidUrl": "원격 Ollama 서버의 HTTP(S) URL을 입력하세요. 사용자 정보·쿼리·프래그먼트는 사용할 수 없습니다.",
+        "tokenRequired": "이 서버의 Bearer 토큰을 입력하세요. 서버 주소가 바뀌면 새 토큰이 필요합니다.",
+        "invalidLimits": "동시 요청은 1~8개, 대기는 1~3600초, 응답은 5~7200초로 입력하세요.",
+        "statusResult": "확인: {time} · 모델 설치: {available} · 메모리 로드: {loaded}",
+        "yes": "확인됨",
+        "no": "아니요",
+        "unknown": "확인 불가",
+        "tokenPlaceholder": "게이트웨이에서 발급한 토큰"
       }
     },
     "retryLayer": {

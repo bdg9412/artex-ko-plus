@@ -27,6 +27,8 @@ type huntRequest struct {
 }
 
 func (s *Server) registerHunts(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/defensive/hunts/trends", s.listHuntTrends)
+	mux.HandleFunc("POST /api/defensive/hunts/trends/collect", s.collectHuntTrends)
 	mux.HandleFunc("GET /api/defensive/hunts", s.listHunts)
 	mux.HandleFunc("POST /api/defensive/hunts", s.createHunt)
 	mux.HandleFunc("GET /api/defensive/hunts/{id}", s.getHunt)

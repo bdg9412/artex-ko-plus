@@ -1,6 +1,6 @@
 <div align="center">
 
-# AegisLoop : ARTEX-KO Plus
+<img src="docs/guide-images/aegisloop-hero-20261031.png" alt="AegisLoop — Discover · Hunt · Validate" width="100%">
 
 **취약점 발견부터 방어 검증·침해 조사·자율헌팅까지**
 
@@ -12,7 +12,7 @@
 
 AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-ko](https://github.com/jiwoochris/artex-ko)를 기반으로 한 보안 검증 프로젝트입니다. 허가된 자산에서 찾은 취약점을 출발점으로 공격·탐지 시나리오를 설계하고, 실제 실행 로그로 탐지·차단 여부를 검증하며, 과거 로그에서 관련 행동을 조사합니다. 별도의 Defensive 자율헌팅은 입력한 취약점·공격 기법을 조사하고 허용한 Splunk 로그에서 관련 근거를 찾습니다.
 
-## 모델 선택 (기존 환경에서 Ollama, AWS Bedrock 호출 기능 확장)
+## 전체 기능 한눈에 보기
 
 **시스템 → LLM → 새 프로필**에서 모델 연결을 직접 선택할 수 있습니다. 화면에서 제공하는 형식은 **Anthropic**, **OpenAI (Chat Completions)**, **OpenAI (Responses API)**, **Ollama**, **Amazon Bedrock Converse**, **OrcaRouter Cyber Inference**입니다. 프로필마다 모델 ID와 연결 주소를 지정할 수 있으며, 여러 프로필을 저장해 작업의 **LLM 설정 체인**에서 선택할 수도 있습니다.  
   
@@ -22,33 +22,39 @@ AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-
 -  Ollama 로컬 모델
 -  AWS Bedrock 모델
 -  OrcaRouter Cyber Inference (API 기준 주소 `https://api.orcarouter.ai/v1`, 모델 목록 자동 조회)
+```mermaid
+flowchart TB
+    scope["허가된 자산·범위"] --> offensive["Offensive<br/>탐색·취약점 진단"]
+    offensive --> finding["취약점·재현 근거"]
+    finding --> defensive["Defensive<br/>공격·탐지 시나리오"]
+    defensive --> validation["방어 검증<br/>재진단·감사/경보 대조"]
+    validation --> loop["Closed-loop<br/>개선 전후 비교·재검증"]
+    finding --> investigation["침해 조사<br/>과거 로그·AI 근거 분석"]
 
+    feeds["CISA KEV·보안 RSS<br/>자동 수집"] --> reports["위협 동향 리포트<br/>자산 제품명 단서"]
+    reports --> review["담당자 검토<br/>허용 로그 범위 확인"]
+    review --> hunt["자율헌팅<br/>리서치·시나리오·Splunk·근거 판정"]
+    finding -. "취약점 직접 입력" .-> review
+```
+
+## 모델 선택과 출력 언어
+
+**시스템 → LLM → 새 프로필**에서 모델 연결을 직접 선택할 수 있습니다. 화면에서 제공하는 형식은 **Anthropic**, **OpenAI (Chat Completions)**, **OpenAI (Responses API)**, **Ollama (로컬)**, **Ollama (원격 서버)**, **Amazon Bedrock Converse**입니다. 프로필마다 모델 ID와 연결 주소를 지정할 수 있으며, 여러 프로필을 저장해 작업의 **LLM 설정 체인**에서 선택할 수도 있습니다.
 
 ![새 프로필의 LLM 제공자 선택 목록](docs/guide-images/llm-model-selection-20261026.jpg)
 
-아래는 로컬 환경에 **이미 저장된** Ollama와 Amazon Bedrock Converse 프로필의 화면입니다. 두 프로필 모두 캡처 시점에 `정상`으로 표시됐으며, Bedrock의 경우에는 opus, Ollama는 qwen, deepseek-rl으로 호출 및 진단을 수행하였습니다. ollama는 컴퓨팅 한계로 9B정도의 모델로 수행하여 정확한 진단이 어려웠지만, Bedrock은 취약점을 잘 찾는 것을 확인할 수 있었습니다.
+아래는 로컬 환경에 **이미 저장된** Ollama와 Amazon Bedrock Converse 프로필의 화면입니다. 두 프로필 모두 캡처 시점에 `정상`으로 표시됐으며, 인증 정보는 이미지에 포함하지 않았습니다.
 
 ![저장된 Ollama·Bedrock 프로필 상태](docs/guide-images/llm-ollama-bedrock-status-20261026.jpg)
 
-1. 형식을 고르고 프로필 이름, 사용할 **모델 ID**, 해당 공급자의 연결 주소와 인증 정보를 입력합니다. Ollama는 API 키가 필요하지 않으며, Docker에서 호스트의 Ollama에 연결할 때는 기본 URL로 `http://host.docker.internal:11434/v1`을 사용합니다.
-2. **연결 테스트**로 실제 응답을 확인한 다음 저장하고, 전역에서 사용할 프로필은 **활성으로 설정**합니다. 작업에 LLM 설정 체인을 지정했다면 그 작업의 선택을 별도로 확인합니다.
-3. Bedrock은 **Amazon Bedrock Converse**를 선택하고 해당 리전의 Runtime URL(예: `https://bedrock-runtime.ap-northeast-2.amazonaws.com`), 계정에서 사용할 수 있는 모델 ID 또는 추론 프로필 ID/ARN, **Amazon Bedrock API 키**를 입력합니다. 모델 목록은 자동 조회하지 않습니다. 모델의 직접 호출이 on-demand를 지원하지 않으면 AWS가 요구하는 추론 프로필 ID/ARN을 사용해야 합니다. 특정 모델 계열로 고정되지 않으며, 실제 Converse 지원 여부와 호출 권한은 연결 테스트에서 확인합니다.
-4. 허가된 보안 검증 작업을 [OrcaRouter](https://www.orcarouter.ai)로 라우팅하려면 **OrcaRouter Cyber Inference**를 선택합니다. 연결 주소는 `https://api.orcarouter.ai/v1`, 인증은 `sk-orca-…` API 키이며, **모델**은 고정 목록이 아니라 해당 주소의 실시간 카탈로그에서 채워집니다. 기본값은 `orcarouter/auto`, 보안 팀 권장 모델은 `orcacyber-ultra-1.0`·`orcacyber-zero-1.5`입니다. 자세한 내용은 [OrcaRouter 프로필 안내](docs/ORCAROUTER_PROVIDER_KO.md)를 참고하세요.
+1. Bedrock은 **Amazon Bedrock Converse**를 선택하고 해당 리전의 Runtime URL(예: `https://bedrock-runtime.ap-northeast-2.amazonaws.com`), 계정에서 사용할 수 있는 모델 ID 또는 추론 프로필 ID/ARN, **Amazon Bedrock API 키**를 입력합니다. 모델 목록은 자동 조회하지 않습니다. 모델의 직접 호출이 on-demand를 지원하지 않으면 AWS가 요구하는 추론 프로필 ID/ARN을 사용해야 합니다. 특정 모델 계열로 고정되지 않으며, 실제 Converse 지원 여부와 호출 권한은 연결 테스트에서 확인합니다.
+2. 허가된 보안 검증 작업을 [OrcaRouter](https://www.orcarouter.ai)로 라우팅하려면 **OrcaRouter Cyber Inference**를 선택합니다. 연결 주소는 `https://api.orcarouter.ai/v1`, 인증은 `sk-orca-…` API 키이며, **모델**은 고정 목록이 아니라 해당 주소의 실시간 카탈로그에서 채워집니다. 기본값은 `orcarouter/auto`, 보안 팀 권장 모델은 `orcacyber-ultra-1.0`·`orcacyber-zero-1.5`입니다. 자세한 내용은 [OrcaRouter 프로필 안내](docs/ORCAROUTER_PROVIDER_KO.md)를 참고하세요.
+3. 별도 PC의 모델 서버는 **Ollama (원격 서버)**를 선택하고 서버 URL·인증 방식·동시 요청 수·대기 및 응답 제한을 지정합니다. **서버 상태 확인**은 모델 목록과 로드 상태만 조회하고, **응답 테스트**는 실제 모델을 호출합니다.
+4. **연결 테스트**로 실제 응답을 확인한 다음 저장하고, 전역에서 사용할 프로필은 **활성으로 설정**합니다. 작업에 LLM 설정 체인을 지정했다면 그 작업의 선택을 별도로 확인합니다.
 
 API 키, 계정별 ARN, 실제 요청·응답에 포함된 민감 정보는 README·증적·Git 기록에 넣지 마세요. 진단과 AI 기능의 응답 품질·언어·사용량은 등록한 모델에 따라 달라집니다. 작업 목표에 원하는 출력 언어를 명시하고 생성된 시나리오와 조사 결과를 원본 근거와 대조하세요. AI 침해 조사를 시작하면 선택한 취약점 근거와 로그 발췌가 설정한 모델 공급자에게 전송될 수 있습니다.
 
 이번 공개 소스의 빌드·테스트·비밀값 제외 확인 범위는 [배포 검증 증적](docs/RELEASE_EVIDENCE_KO.md)에 기록했습니다.
-
-```text
-Offensive: 취약점과 재현 근거
-    ↓
-Defensive: 공격·탐지 시나리오 → 방어 계획 → 실제 로그 기반 방어 검증
-    ↓
-침해 조사: 로그 근거 준비 → AI 조사 → 관측 결과와 원본 근거 확인
-
-Defensive 자율헌팅: 취약점·공격 기법 입력 → 리서치 → 시나리오 설계
-                 → Splunk 헌팅 → 근거 판정
-```
 
 ## Offensive 진단 실행
 
@@ -129,6 +135,14 @@ Offensive의 ARTEX 작업이 기록한 취약점에서 대상 자산, 경로, �
 **Defensive → 자율헌팅**에서 취약점 이름·CVE·공격 기법을 입력하고, 검색 권한이 있는 Splunk 연결과 조사할 로그 유형, 대상 자산, 과거 시간 범위를 지정합니다. 실행 전 조회 범위를 확인하면 네 엔진이 **리서치 → 공격·탐지 시나리오 → Splunk 자율헌팅 → 근거 판정** 순서로 진행합니다. 상단 엔진 상태를 누르면 해당 결과 탭으로 이동할 수 있고, 실행 이력에서 결과를 다시 보거나 중지·내보내기할 수 있습니다.
 
 자율헌팅은 취약점 상세의 **AI 시나리오 생성** 및 위 **취약점 → 방어 검증 → 침해 조사** 흐름과 별도입니다. Splunk 조회는 지정한 연결·로그 유형·자산·기간 안에서 읽기 전용으로 실행합니다.
+
+### 자동 위협 동향에서 헌팅 시작
+
+로그인 후 **Defensive → 자율헌팅 → 위협 동향**에서 CISA KEV와 보안뉴스·데일리시큐·BleepingComputer·The Hacker News의 공개 피드를 바탕으로 만든 리포트를 볼 수 있습니다. 서버가 15분마다 수집하며, 화면에서 검색과 **KEV / CVE 보도 / 보안 동향** 필터로 후보를 좁힐 수 있습니다. 리포트를 선택하면 요약, 헌팅 검토 이유, 원문 출처와 등록 자산의 제품명 일치 단서를 확인할 수 있습니다. 제품명 일치는 영향 버전·설정이나 실제 취약 상태를 확정하지 않습니다.
+
+**이 리포트로 헌팅 설정**을 누르면 조사 주제와 공개 참고 URL이 채워집니다. 자산 단서가 있으면 해당 자산을 대상 입력에 사용할 수 있습니다. 담당자가 **헌팅 작업**에서 Splunk 연결·로그 유형·대상·기간을 검토하고 읽기 전용 조회 범위를 확인한 뒤 실행합니다. 동향 수집만으로 Splunk 조회나 헌팅이 자동 시작되지는 않습니다.
+
+![자동 수집된 위협 동향을 목록과 상세에서 검토하는 자율헌팅 화면](docs/guide-images/autonomous-hunting-trends-20261031.jpg)
 
 ### 자율헌팅 엔진
 

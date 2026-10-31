@@ -229,7 +229,7 @@ func TestHuntPHP2ShellResearchToSplunkEvidenceIndependent(t *testing.T) {
 }
 func TestHuntRoutesRequireAuthentication(t *testing.T) {
 	s := &Server{jwtKey: []byte("fixture-key")}
-	for _, route := range []struct{ method, path string }{{"GET", "/api/defensive/hunts"}, {"POST", "/api/defensive/hunts"}, {"GET", "/api/defensive/hunts/1"}, {"GET", "/api/defensive/hunts/1/export"}, {"POST", "/api/defensive/hunts/1/cancel"}} {
+	for _, route := range []struct{ method, path string }{{"GET", "/api/defensive/hunts"}, {"POST", "/api/defensive/hunts"}, {"GET", "/api/defensive/hunts/trends"}, {"POST", "/api/defensive/hunts/trends/collect"}, {"GET", "/api/defensive/hunts/1"}, {"GET", "/api/defensive/hunts/1/export"}, {"POST", "/api/defensive/hunts/1/cancel"}} {
 		w := httptest.NewRecorder()
 		s.Handler().ServeHTTP(w, httptest.NewRequest(route.method, route.path, strings.NewReader(`{}`)))
 		if w.Code != 401 {

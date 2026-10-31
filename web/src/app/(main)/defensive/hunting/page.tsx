@@ -4,17 +4,11 @@ import * as React from "react";
 
 import Link from "next/link";
 
-import {
-  ChevronDownIcon,
-  DownloadIcon,
-  PlayIcon,
-  PlusIcon,
-  RefreshCwIcon,
-  SquareIcon,
-} from "lucide-react";
+import { ChevronDownIcon, DownloadIcon, PlayIcon, PlusIcon, RefreshCwIcon, SquareIcon } from "lucide-react";
 
 import { HuntingProgress } from "@/components/hunting-progress";
 import { HuntingResultView } from "@/components/hunting-result-view";
+import { HuntingTrendExplorer } from "@/components/hunting-trend-explorer";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,12 +18,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { HttpError } from "@/lib/api";
 import {
   type HuntingRequest,
   type HuntingRun,
   type HuntingRunSummary,
+  type HuntingTrendCollection,
+  type HuntingTrendInventory,
+  type HuntingTrendReport,
   huntingApi,
   huntingRunActive,
   huntingStatusLabel,
@@ -96,6 +94,12 @@ export default function HuntingPage() {
   const fieldId = React.useId();
   const [sources, setSources] = React.useState<SecuritySource[]>([]);
   const [runs, setRuns] = React.useState<HuntingRunSummary[]>([]);
+  const [trendReports, setTrendReports] = React.useState<HuntingTrendReport[]>([]);
+  const [trendCollection, setTrendCollection] = React.useState<HuntingTrendCollection | null>(null);
+  const [trendInventory, setTrendInventory] = React.useState<HuntingTrendInventory | null>(null);
+  const [trendError, setTrendError] = React.useState("");
+  const [trendStarting, setTrendStarting] = React.useState(false);
+  const [view, setView] = React.useState<"trends" | "hunt">("trends");
   const [historyTruncated, setHistoryTruncated] = React.useState(false);
   const [sourceError, setSourceError] = React.useState("");
   const [historyError, setHistoryError] = React.useState("");
@@ -142,6 +146,19 @@ export default function HuntingPage() {
   });
   const scopeConfirmed = confirmedScope === scopeKey;
 
+  const loadTrends = React.useCallback(async () => {
+    try {
+      const response = await huntingApi.trends();
+      if (!mounted.current) return;
+      setTrendReports(response.reports ?? []);
+      setTrendCollection(response.collection);
+      setTrendInventory(response.inventory);
+      setTrendError("");
+    } catch (caught) {
+      if (mounted.current) setTrendError((caught as Error).message);
+    }
+  }, []);
+
   const load = React.useCallback(async () => {
     const seq = ++metadataSeq.current;
     setLoading(true);
@@ -174,12 +191,40 @@ export default function HuntingPage() {
 
   React.useEffect(() => {
     mounted.current = true;
+    if (new URLSearchParams(window.location.search).has("run")) setView("hunt");
     void load();
+    void loadTrends();
     return () => {
       mounted.current = false;
       metadataSeq.current++;
     };
-  }, [load]);
+  }, [load, loadTrends]);
+
+  React.useEffect(() => {
+    if (!trendCollection?.busy) return;
+    const timer = setTimeout(() => void loadTrends(), 3000);
+    return () => clearTimeout(timer);
+  }, [trendCollection, loadTrends]);
+
+  React.useEffect(() => {
+    const timer = setInterval(() => void loadTrends(), 30000);
+    return () => clearInterval(timer);
+  }, [loadTrends]);
+
+  const collectTrends = async () => {
+    if (trendStarting || trendCollection?.busy) return;
+    setTrendStarting(true);
+    setTrendError("");
+    try {
+      await huntingApi.collectTrends();
+      await loadTrends();
+    } catch (caught) {
+      setTrendError((caught as Error).message);
+      await loadTrends();
+    } finally {
+      if (mounted.current) setTrendStarting(false);
+    }
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: refreshKey intentionally restarts polling on manual refresh or reselection.
   React.useEffect(() => {
@@ -219,6 +264,7 @@ export default function HuntingPage() {
   }, [selectedId, refreshKey]);
 
   const selectRun = (item: HuntingRunSummary) => {
+    setView("hunt");
     detailEpoch.current++;
     setActionError("");
     if (selectedRef.current !== item.id) {
@@ -243,6 +289,25 @@ export default function HuntingPage() {
     setDetailError("");
     setActionError("");
     setFormOpen(true);
+  };
+
+  const startFromReport = (report: HuntingTrendReport, assetTarget = "") => {
+    openNewHunt();
+    setView("hunt");
+    setTerm(report.term);
+    setTarget(assetTarget);
+    setPathPrefix("");
+    setStart(localTime(Date.now() - 86400000));
+    setEnd(localTime(Date.now()));
+    setResearchURLs(
+      report.references
+        .filter((reference) => reference.source !== "CISA KEV")
+        .map((reference) => reference.url)
+        .slice(0, 8)
+        .join("\n"),
+    );
+    setConfirmedScope(null);
+    requestAnimationFrame(() => document.getElementById(`${fieldId}-term`)?.focus());
   };
 
   const selectPhase = (phase: HuntingPhaseId) => {
@@ -404,372 +469,403 @@ export default function HuntingPage() {
           </p>
         </div>
       </div>
-      <HuntingProgress
-        run={run}
-        loading={!!selectedId && !run && detailLoading}
-        activePhase={activePhase}
-        onPhaseSelect={selectPhase}
-        resultTabsId={resultTabsId}
-      />
-      <div className="space-y-3 rounded-lg border p-3">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="w-full min-w-0 space-y-1.5 lg:w-auto lg:flex-1">
-            <Label htmlFor={`${fieldId}-run`}>헌팅 이력</Label>
-            <select
-              id={`${fieldId}-run`}
-              className={SELECT_CLASS}
-              value={selectedId}
-              disabled={!!busy || loading}
-              onChange={(event) => {
-                const item = runs.find((entry) => entry.id === event.target.value);
-                if (item) selectRun(item);
-                else openNewHunt();
-              }}
-            >
-              <option value="">새 헌팅</option>
-              {runs.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.term || item.request?.term || `헌팅 #${item.id}`} · {huntingStatusLabel(item.status)} ·{" "}
-                  {new Date(item.created_at).toLocaleString()}
-                </option>
-              ))}
-            </select>
-          </div>
-          <Button variant="outline" size="sm" onClick={openNewHunt} disabled={!!busy}>
-            <PlusIcon />새 헌팅
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              void load();
-              if (selectedId) {
-                detailEpoch.current++;
-                setRefreshKey((key) => key + 1);
-              }
-            }}
-            disabled={loading || detailLoading || !!busy}
-          >
-            <RefreshCwIcon className={loading ? "animate-spin" : undefined} />
-            새로고침
-          </Button>
-          {selectedId ? (
-            <>
-              {run && huntingRunActive(run.status) ? (
-                <Button variant="outline" size="sm" disabled={!!busy} onClick={() => void cancel()}>
-                  {busy === "cancel" ? <Spinner /> : <SquareIcon />}중지
-                </Button>
-              ) : null}
-              <Button variant="outline" size="sm" disabled={!run || !!busy} onClick={() => void exportRun()}>
-                {busy === "export" ? <Spinner /> : <DownloadIcon />}JSON 내보내기
-              </Button>
-            </>
-          ) : null}
-        </div>
-        {historyError ? (
-          <Alert variant="destructive">
-            <AlertDescription>{historyError}</AlertDescription>
-          </Alert>
-        ) : null}
-        {historyTruncated ? <p className="text-muted-foreground text-xs">최근 이력 일부를 표시합니다.</p> : null}
-        {!loading && !historyError && !runs.length ? (
-          <p className="text-muted-foreground text-xs">저장된 헌팅 실행이 없습니다.</p>
-        ) : null}
-      </div>
-      {formOpen ? (
-        <Collapsible open={formOpen} onOpenChange={setFormOpen}>
-          <Card className="gap-0 py-0">
-            <CardHeader className="flex flex-row items-center justify-between gap-3 py-3">
-              <div className="space-y-1">
-                <CardTitle className="text-sm">새 헌팅 설정</CardTitle>
-                {formOpen ? <CardDescription>조사 주제와 허용할 자산·기간·로그를 지정하세요.</CardDescription> : null}
-              </div>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" aria-label={formOpen ? "헌팅 설정 접기" : "헌팅 설정 펼치기"}>
-                  {formOpen ? "접기" : "펼치기"}
-                  <ChevronDownIcon className={formOpen ? "rotate-180" : undefined} />
-                </Button>
-              </CollapsibleTrigger>
-            </CardHeader>
-            <CollapsibleContent>
-              <CardContent className="pb-5">
-                {error ? (
-                  <Alert variant="destructive" className="mb-4">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                ) : null}
-                <form
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void create();
+      <Tabs value={view} onValueChange={(next) => setView(next as "trends" | "hunt")} className="space-y-4">
+        <TabsList aria-label="자율 위협 헌팅 화면">
+          <TabsTrigger value="trends">위협 동향 · {trendReports.length}</TabsTrigger>
+          <TabsTrigger value="hunt">헌팅 작업</TabsTrigger>
+        </TabsList>
+        <TabsContent value="trends" className="mt-0">
+          <HuntingTrendExplorer
+            reports={trendReports}
+            collection={trendCollection}
+            inventory={trendInventory}
+            error={trendError}
+            starting={trendStarting}
+            huntBusy={!!busy}
+            onCollect={() => void collectTrends()}
+            onHunt={startFromReport}
+          />
+        </TabsContent>
+        <TabsContent value="hunt" className="mt-0 space-y-4">
+          <HuntingProgress
+            run={run}
+            loading={!!selectedId && !run && detailLoading}
+            activePhase={activePhase}
+            onPhaseSelect={selectPhase}
+            resultTabsId={resultTabsId}
+          />
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-full min-w-0 space-y-1.5 lg:w-auto lg:flex-1">
+                <Label htmlFor={`${fieldId}-run`}>헌팅 이력</Label>
+                <select
+                  id={`${fieldId}-run`}
+                  className={SELECT_CLASS}
+                  value={selectedId}
+                  disabled={!!busy || loading}
+                  onChange={(event) => {
+                    const item = runs.find((entry) => entry.id === event.target.value);
+                    if (item) selectRun(item);
+                    else openNewHunt();
                   }}
                 >
-                  <fieldset disabled={!!busy || loading} className="space-y-5 disabled:opacity-70">
-                    <div className="space-y-2">
-                      <Label htmlFor={`${fieldId}-term`}>취약점·공격 기법 또는 조사 질문</Label>
-                      <Textarea
-                        id={`${fieldId}-term`}
-                        value={term}
-                        onChange={(event) => setTerm(event.target.value)}
-                        required
-                        maxLength={200}
-                        rows={2}
-                        placeholder="예: 공개된 디렉터리의 민감 파일 접근 흔적 조사"
-                      />
-                    </div>
-                    <details className="rounded-lg border p-4">
-                      <summary className="cursor-pointer font-medium text-sm">공개 참고 URL 추가 (선택)</summary>
-                      <div className="mt-3 space-y-2">
-                        <Label htmlFor={`${fieldId}-urls`}>공식 권고문·기술 자료 URL</Label>
-                        <Textarea
-                          id={`${fieldId}-urls`}
-                          value={researchURLs}
-                          onChange={(event) => setResearchURLs(event.target.value)}
-                          rows={3}
-                          maxLength={16000}
-                          placeholder="https://… (한 줄에 하나, 최대 8개)"
-                        />
-                        <p className="text-muted-foreground text-xs">
-                          인증정보나 내부 시스템 주소를 넣지 마세요. 실제로 가져온 자료의 출처와 발췌문을 결과에서
-                          확인할 수 있습니다.
-                        </p>
-                      </div>
-                    </details>
-                    <div className="space-y-3 rounded-lg border p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <Label htmlFor={`${fieldId}-source`}>Splunk 연결</Label>
-                        <Link href="/function/purple/sources" className="text-xs underline underline-offset-2">
-                          로그 연결 관리
-                        </Link>
-                      </div>
-                      {sourceError ? (
-                        <Alert variant="destructive">
-                          <AlertDescription>{sourceError}</AlertDescription>
-                        </Alert>
-                      ) : null}
-                      <select
-                        id={`${fieldId}-source`}
-                        className={SELECT_CLASS}
-                        value={sourceId}
-                        onChange={(event) => {
-                          const id = event.target.value;
-                          setSourceId(id);
-                          setSourcetypes(securitySourceSourcetypes(sources.find((source) => source.id === id)));
-                        }}
-                        required
-                      >
-                        <option value="">연결을 선택하세요</option>
-                        {sources.map((source) => (
-                          <option
-                            key={source.id}
-                            value={source.id}
-                            disabled={!source.enabled || !source.credential_set}
-                          >
-                            {source.name} · v{source.revision}
-                            {!source.enabled || !source.credential_set ? " · 사용 불가" : ""}
-                          </option>
-                        ))}
-                      </select>
-                      {!loading && !sources.some((source) => source.enabled && source.credential_set) ? (
-                        <p className="text-muted-foreground text-sm">
-                          활성화와 인증 설정을 마친 Splunk 연결이 필요합니다.
-                        </p>
-                      ) : null}
-                      {selectedSource ? (
+                  <option value="">새 헌팅</option>
+                  {runs.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.term || item.request?.term || `헌팅 #${item.id}`} · {huntingStatusLabel(item.status)} ·{" "}
+                      {new Date(item.created_at).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <Button variant="outline" size="sm" onClick={openNewHunt} disabled={!!busy}>
+                <PlusIcon />새 헌팅
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  void load();
+                  if (selectedId) {
+                    detailEpoch.current++;
+                    setRefreshKey((key) => key + 1);
+                  }
+                }}
+                disabled={loading || detailLoading || !!busy}
+              >
+                <RefreshCwIcon className={loading ? "animate-spin" : undefined} />
+                새로고침
+              </Button>
+              {selectedId ? (
+                <>
+                  {run && huntingRunActive(run.status) ? (
+                    <Button variant="outline" size="sm" disabled={!!busy} onClick={() => void cancel()}>
+                      {busy === "cancel" ? <Spinner /> : <SquareIcon />}중지
+                    </Button>
+                  ) : null}
+                  <Button variant="outline" size="sm" disabled={!run || !!busy} onClick={() => void exportRun()}>
+                    {busy === "export" ? <Spinner /> : <DownloadIcon />}JSON 내보내기
+                  </Button>
+                </>
+              ) : null}
+            </div>
+            {historyError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{historyError}</AlertDescription>
+              </Alert>
+            ) : null}
+            {historyTruncated ? <p className="text-muted-foreground text-xs">최근 이력 일부를 표시합니다.</p> : null}
+            {!loading && !historyError && !runs.length ? (
+              <p className="text-muted-foreground text-xs">저장된 헌팅 실행이 없습니다.</p>
+            ) : null}
+          </div>
+          {formOpen ? (
+            <Collapsible open={formOpen} onOpenChange={setFormOpen}>
+              <Card className="gap-0 py-0">
+                <CardHeader className="flex flex-row items-center justify-between gap-3 py-3">
+                  <div className="space-y-1">
+                    <CardTitle className="text-sm">새 헌팅 설정</CardTitle>
+                    {formOpen ? (
+                      <CardDescription>조사 주제와 허용할 자산·기간·로그를 지정하세요.</CardDescription>
+                    ) : null}
+                  </div>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" aria-label={formOpen ? "헌팅 설정 접기" : "헌팅 설정 펼치기"}>
+                      {formOpen ? "접기" : "펼치기"}
+                      <ChevronDownIcon className={formOpen ? "rotate-180" : undefined} />
+                    </Button>
+                  </CollapsibleTrigger>
+                </CardHeader>
+                <CollapsibleContent>
+                  <CardContent className="pb-5">
+                    {error ? (
+                      <Alert variant="destructive" className="mb-4">
+                        <AlertDescription>{error}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                    <form
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void create();
+                      }}
+                    >
+                      <fieldset disabled={!!busy || loading} className="space-y-5 disabled:opacity-70">
                         <div className="space-y-2">
-                          <p className="font-medium text-sm">조회할 로그 유형</p>
-                          {securitySourceSourcetypes(selectedSource).map((kind) => (
-                            <label key={kind} className="flex items-start gap-2 text-sm">
-                              <input
-                                type="checkbox"
-                                className="mt-1"
-                                checked={sourcetypes.includes(kind)}
-                                onChange={(event) => {
-                                  const checked = event.target.checked;
-                                  setSourcetypes((current) =>
-                                    checked ? [...current, kind] : current.filter((value) => value !== kind),
-                                  );
-                                }}
-                              />
-                              <span className="break-all">
-                                {kind}
-                                <span className="ml-2 text-muted-foreground text-xs">
-                                  {[
-                                    ...new Set(
-                                      selectedSource.config.streams
-                                        ?.filter((stream) => stream.sourcetype === kind)
-                                        .map((stream) => stream.index) ?? [selectedSource.config.index].filter(Boolean),
-                                    ),
-                                  ].join(", ")}
-                                </span>
-                              </span>
-                            </label>
-                          ))}
-                          <p className="text-muted-foreground text-xs">
-                            연결을 선택하면 등록된 모든 로그 유형이 기본 선택됩니다. 필요하면 해제하세요. 저장된 연결의
-                            허용 인덱스와 선택한 로그 유형 안에서 조회합니다.
-                          </p>
-                          {sourcetypes.length > 8 ? (
+                          <Label htmlFor={`${fieldId}-term`}>취약점·공격 기법 또는 조사 질문</Label>
+                          <Textarea
+                            id={`${fieldId}-term`}
+                            value={term}
+                            onChange={(event) => setTerm(event.target.value)}
+                            required
+                            maxLength={200}
+                            rows={2}
+                            placeholder="예: 공개된 디렉터리의 민감 파일 접근 흔적 조사"
+                          />
+                        </div>
+                        <details className="rounded-lg border p-4">
+                          <summary className="cursor-pointer font-medium text-sm">공개 참고 URL 추가 (선택)</summary>
+                          <div className="mt-3 space-y-2">
+                            <Label htmlFor={`${fieldId}-urls`}>공식 권고문·기술 자료 URL</Label>
+                            <Textarea
+                              id={`${fieldId}-urls`}
+                              value={researchURLs}
+                              onChange={(event) => setResearchURLs(event.target.value)}
+                              rows={3}
+                              maxLength={16000}
+                              placeholder="https://… (한 줄에 하나, 최대 8개)"
+                            />
+                            <p className="text-muted-foreground text-xs">
+                              인증정보나 내부 시스템 주소를 넣지 마세요. 실제로 가져온 자료의 출처와 발췌문을 결과에서
+                              확인할 수 있습니다.
+                            </p>
+                          </div>
+                        </details>
+                        <div className="space-y-3 rounded-lg border p-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Label htmlFor={`${fieldId}-source`}>Splunk 연결</Label>
+                            <Link href="/function/purple/sources" className="text-xs underline underline-offset-2">
+                              로그 연결 관리
+                            </Link>
+                          </div>
+                          {sourceError ? (
                             <Alert variant="destructive">
-                              <AlertDescription>
-                                로그 유형 {sourcetypes.length}개가 선택되어 있습니다. 한 실행의 한도는 8개이므로 조사에
-                                필요한 유형을 직접 선택해 주세요.
-                              </AlertDescription>
+                              <AlertDescription>{sourceError}</AlertDescription>
                             </Alert>
                           ) : null}
+                          <select
+                            id={`${fieldId}-source`}
+                            className={SELECT_CLASS}
+                            value={sourceId}
+                            onChange={(event) => {
+                              const id = event.target.value;
+                              setSourceId(id);
+                              setSourcetypes(securitySourceSourcetypes(sources.find((source) => source.id === id)));
+                            }}
+                            required
+                          >
+                            <option value="">연결을 선택하세요</option>
+                            {sources.map((source) => (
+                              <option
+                                key={source.id}
+                                value={source.id}
+                                disabled={!source.enabled || !source.credential_set}
+                              >
+                                {source.name} · v{source.revision}
+                                {!source.enabled || !source.credential_set ? " · 사용 불가" : ""}
+                              </option>
+                            ))}
+                          </select>
+                          {!loading && !sources.some((source) => source.enabled && source.credential_set) ? (
+                            <p className="text-muted-foreground text-sm">
+                              활성화와 인증 설정을 마친 Splunk 연결이 필요합니다.
+                            </p>
+                          ) : null}
+                          {selectedSource ? (
+                            <div className="space-y-2">
+                              <p className="font-medium text-sm">조회할 로그 유형</p>
+                              {securitySourceSourcetypes(selectedSource).map((kind) => (
+                                <label key={kind} className="flex items-start gap-2 text-sm">
+                                  <input
+                                    type="checkbox"
+                                    className="mt-1"
+                                    checked={sourcetypes.includes(kind)}
+                                    onChange={(event) => {
+                                      const checked = event.target.checked;
+                                      setSourcetypes((current) =>
+                                        checked ? [...current, kind] : current.filter((value) => value !== kind),
+                                      );
+                                    }}
+                                  />
+                                  <span className="break-all">
+                                    {kind}
+                                    <span className="ml-2 text-muted-foreground text-xs">
+                                      {[
+                                        ...new Set(
+                                          selectedSource.config.streams
+                                            ?.filter((stream) => stream.sourcetype === kind)
+                                            .map((stream) => stream.index) ??
+                                            [selectedSource.config.index].filter(Boolean),
+                                        ),
+                                      ].join(", ")}
+                                    </span>
+                                  </span>
+                                </label>
+                              ))}
+                              <p className="text-muted-foreground text-xs">
+                                연결을 선택하면 등록된 모든 로그 유형이 기본 선택됩니다. 필요하면 해제하세요. 저장된
+                                연결의 허용 인덱스와 선택한 로그 유형 안에서 조회합니다.
+                              </p>
+                              {sourcetypes.length > 8 ? (
+                                <Alert variant="destructive">
+                                  <AlertDescription>
+                                    로그 유형 {sourcetypes.length}개가 선택되어 있습니다. 한 실행의 한도는 8개이므로
+                                    조사에 필요한 유형을 직접 선택해 주세요.
+                                  </AlertDescription>
+                                </Alert>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
-                      ) : null}
-                    </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor={`${fieldId}-target`}>대상 자산</Label>
-                        <Input
-                          id={`${fieldId}-target`}
-                          value={target}
-                          onChange={(event) => setTarget(event.target.value)}
-                          required
-                          maxLength={1024}
-                          placeholder="portal.lab 또는 portal.lab:8080"
-                        />
-                        <p className="text-muted-foreground text-xs">
-                          URL 경로를 제외한 실제 요청 대상 호스트·포트입니다.
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`${fieldId}-path`}>허용 경로 접두어 (선택)</Label>
-                        <Input
-                          id={`${fieldId}-path`}
-                          value={pathPrefix}
-                          onChange={(event) => setPathPrefix(event.target.value)}
-                          maxLength={2048}
-                          placeholder="/exports"
-                        />
-                        <p className="text-muted-foreground text-xs">
-                          비워 두면 지정한 자산의 전체 경로를 조회합니다. 웹·호스트 로그를 함께 조사할 때는 경로를 비워
-                          두세요.
-                        </p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`${fieldId}-start`}>조사 시작 (현지 시각)</Label>
-                        <Input
-                          id={`${fieldId}-start`}
-                          type="datetime-local"
-                          step="1"
-                          value={start}
-                          onChange={(event) => setStart(event.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`${fieldId}-end`}>조사 종료 (현지 시각)</Label>
-                        <Input
-                          id={`${fieldId}-end`}
-                          type="datetime-local"
-                          step="1"
-                          value={end}
-                          onChange={(event) => setEnd(event.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      과거 구간을 최대 31일까지 지정할 수 있습니다. 조회 결과의 부재와 수집·보존 자료의 부재는 구분해
-                      표시합니다.
-                    </p>
-                    <details className="rounded-lg border p-4">
-                      <summary className="cursor-pointer font-medium text-sm">원본 로그 필드 매핑</summary>
-                      <p className="mt-3 text-muted-foreground text-xs leading-relaxed">
-                        Splunk의 host는 수집기일 수 있습니다. 대상 필드는 실제 요청 자산이 기록된 필드로 지정하세요.
-                        시각은 Splunk의 _time을 기준으로 조회합니다.
-                      </p>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {(Object.keys(mapping) as (keyof InvestigationMapping)[]).map((key) => (
-                          <div key={key} className="space-y-1.5">
-                            <Label htmlFor={`${fieldId}-map-${key}`}>{FIELD_LABELS[key]}</Label>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor={`${fieldId}-target`}>대상 자산</Label>
                             <Input
-                              id={`${fieldId}-map-${key}`}
-                              value={mapping[key]}
-                              readOnly={key === "timestamp"}
-                              onChange={(event) => setMapping((current) => ({ ...current, [key]: event.target.value }))}
-                              maxLength={128}
-                              required={
-                                key === "timestamp" ||
-                                key === "target" ||
-                                (key === "path" && Boolean(pathPrefix.trim()))
-                              }
+                              id={`${fieldId}-target`}
+                              value={target}
+                              onChange={(event) => setTarget(event.target.value)}
+                              required
+                              maxLength={1024}
+                              placeholder="portal.lab 또는 portal.lab:8080"
+                            />
+                            <p className="text-muted-foreground text-xs">
+                              URL 경로를 제외한 실제 요청 대상 호스트·포트입니다.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`${fieldId}-path`}>허용 경로 접두어 (선택)</Label>
+                            <Input
+                              id={`${fieldId}-path`}
+                              value={pathPrefix}
+                              onChange={(event) => setPathPrefix(event.target.value)}
+                              maxLength={2048}
+                              placeholder="/exports"
+                            />
+                            <p className="text-muted-foreground text-xs">
+                              비워 두면 지정한 자산의 전체 경로를 조회합니다. 웹·호스트 로그를 함께 조사할 때는 경로를
+                              비워 두세요.
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor={`${fieldId}-start`}>조사 시작 (현지 시각)</Label>
+                            <Input
+                              id={`${fieldId}-start`}
+                              type="datetime-local"
+                              step="1"
+                              value={start}
+                              onChange={(event) => setStart(event.target.value)}
+                              required
                             />
                           </div>
-                        ))}
-                      </div>
-                    </details>
-                    <label className="flex items-start gap-2 text-sm leading-relaxed">
-                      <input
-                        type="checkbox"
-                        className="mt-1"
-                        checked={scopeConfirmed}
-                        onChange={(event) => setConfirmedScope(event.target.checked ? scopeKey : null)}
-                        required
-                      />
-                      <span>
-                        지정한 자산·기간·로그 유형의 읽기 전용 조회를 허용합니다. 조회 범위를 바꾸면 다시 확인합니다.
-                      </span>
-                    </label>
-                    <p className="text-muted-foreground text-xs leading-relaxed">
-                      실행에는 LLM·공개 자료 조회·Splunk 조회가 포함됩니다. 조사 주제와 선택 범위의 로그 발췌가 설정한
-                      모델로 전달되며, 모델·조회·시간 한도와 중지 기능을 적용합니다.
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="submit"
-                        disabled={
-                          !term.trim() ||
-                          !target.trim() ||
-                          !selectedSource?.enabled ||
-                          !selectedSource.credential_set ||
-                          !sourcetypes.length ||
-                          sourcetypes.length > 8 ||
-                          !scopeConfirmed
-                        }
-                      >
-                        {busy === "start" ? <Spinner /> : <PlayIcon />}자율 헌팅 시작
-                      </Button>
-                      <Button type="button" variant="outline" onClick={() => void load()} disabled={loading || !!busy}>
-                        <RefreshCwIcon className={loading ? "animate-spin" : undefined} />
-                        연결·이력 새로고침
-                      </Button>
-                    </div>
-                  </fieldset>
-                </form>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-      ) : null}
-      {selectedId ? (
-        <div className="space-y-4">
-          {detailError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{detailError} 기존에 표시한 결과는 보존합니다.</AlertDescription>
-            </Alert>
+                          <div className="space-y-2">
+                            <Label htmlFor={`${fieldId}-end`}>조사 종료 (현지 시각)</Label>
+                            <Input
+                              id={`${fieldId}-end`}
+                              type="datetime-local"
+                              step="1"
+                              value={end}
+                              onChange={(event) => setEnd(event.target.value)}
+                              required
+                            />
+                          </div>
+                        </div>
+                        <p className="text-muted-foreground text-xs">
+                          과거 구간을 최대 31일까지 지정할 수 있습니다. 조회 결과의 부재와 수집·보존 자료의 부재는
+                          구분해 표시합니다.
+                        </p>
+                        <details className="rounded-lg border p-4">
+                          <summary className="cursor-pointer font-medium text-sm">원본 로그 필드 매핑</summary>
+                          <p className="mt-3 text-muted-foreground text-xs leading-relaxed">
+                            Splunk의 host는 수집기일 수 있습니다. 대상 필드는 실제 요청 자산이 기록된 필드로 지정하세요.
+                            시각은 Splunk의 _time을 기준으로 조회합니다.
+                          </p>
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                            {(Object.keys(mapping) as (keyof InvestigationMapping)[]).map((key) => (
+                              <div key={key} className="space-y-1.5">
+                                <Label htmlFor={`${fieldId}-map-${key}`}>{FIELD_LABELS[key]}</Label>
+                                <Input
+                                  id={`${fieldId}-map-${key}`}
+                                  value={mapping[key]}
+                                  readOnly={key === "timestamp"}
+                                  onChange={(event) =>
+                                    setMapping((current) => ({ ...current, [key]: event.target.value }))
+                                  }
+                                  maxLength={128}
+                                  required={
+                                    key === "timestamp" ||
+                                    key === "target" ||
+                                    (key === "path" && Boolean(pathPrefix.trim()))
+                                  }
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                        <label className="flex items-start gap-2 text-sm leading-relaxed">
+                          <input
+                            type="checkbox"
+                            className="mt-1"
+                            checked={scopeConfirmed}
+                            onChange={(event) => setConfirmedScope(event.target.checked ? scopeKey : null)}
+                            required
+                          />
+                          <span>
+                            지정한 자산·기간·로그 유형의 읽기 전용 조회를 허용합니다. 조회 범위를 바꾸면 다시
+                            확인합니다.
+                          </span>
+                        </label>
+                        <p className="text-muted-foreground text-xs leading-relaxed">
+                          실행에는 LLM·공개 자료 조회·Splunk 조회가 포함됩니다. 조사 주제와 선택 범위의 로그 발췌가
+                          설정한 모델로 전달되며, 모델·조회·시간 한도와 중지 기능을 적용합니다.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="submit"
+                            disabled={
+                              !term.trim() ||
+                              !target.trim() ||
+                              !selectedSource?.enabled ||
+                              !selectedSource.credential_set ||
+                              !sourcetypes.length ||
+                              sourcetypes.length > 8 ||
+                              !scopeConfirmed
+                            }
+                          >
+                            {busy === "start" ? <Spinner /> : <PlayIcon />}자율 헌팅 시작
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => void load()}
+                            disabled={loading || !!busy}
+                          >
+                            <RefreshCwIcon className={loading ? "animate-spin" : undefined} />
+                            연결·이력 새로고침
+                          </Button>
+                        </div>
+                      </fieldset>
+                    </form>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           ) : null}
-          {actionError ? (
-            <Alert variant="destructive">
-              <AlertDescription>{actionError}</AlertDescription>
-            </Alert>
+          {selectedId ? (
+            <div className="space-y-4">
+              {detailError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{detailError} 기존에 표시한 결과는 보존합니다.</AlertDescription>
+                </Alert>
+              ) : null}
+              {actionError ? (
+                <Alert variant="destructive">
+                  <AlertDescription>{actionError}</AlertDescription>
+                </Alert>
+              ) : null}
+              {!run && detailLoading ? <Skeleton className="h-40 w-full" /> : null}
+              {run ? (
+                <HuntingResultView
+                  key={run.id}
+                  run={run}
+                  activePhase={activePhase}
+                  onPhaseChange={setActivePhase}
+                  tabsRef={resultTabsRef}
+                  tabsId={resultTabsId}
+                />
+              ) : null}
+            </div>
           ) : null}
-          {!run && detailLoading ? <Skeleton className="h-40 w-full" /> : null}
-          {run ? (
-            <HuntingResultView
-              key={run.id}
-              run={run}
-              activePhase={activePhase}
-              onPhaseChange={setActivePhase}
-              tabsRef={resultTabsRef}
-              tabsId={resultTabsId}
-            />
-          ) : null}
-        </div>
-      ) : null}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
