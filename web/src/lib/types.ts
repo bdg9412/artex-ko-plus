@@ -1023,10 +1023,34 @@ export interface NotificationDelivery {
 }
 
 // ---- LLM config ----
+export interface OllamaRemoteOptions {
+  auth_mode?: "none" | "bearer";
+  max_concurrent?: number;
+  queue_timeout_seconds?: number;
+  request_timeout_seconds?: number;
+}
+export interface OllamaStatus {
+  checked_at: string;
+  reachable: boolean;
+  model_available: boolean;
+  model_loaded: boolean;
+  running_known: boolean;
+  context_tokens?: number;
+  models: string[];
+}
 export interface LLMProfile {
+  ollama_remote?: OllamaRemoteOptions;
   id: string;
   name: string;
-  format: "openai" | "anthropic" | "openai-responses" | "ollama" | "bedrock" | "bedrock-converse" | "bedrock-marketplace";
+  format:
+    | "openai"
+    | "anthropic"
+    | "openai-responses"
+    | "ollama"
+    | "ollama-remote"
+    | "bedrock"
+    | "bedrock-converse"
+    | "bedrock-marketplace";
   base_url?: string;
   proxy?: string;
   model: string;

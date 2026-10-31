@@ -41,7 +41,7 @@ func (s *Server) resolutionFromProfile(p *db.LLMProfile, source string) taskLLMR
 		Model:     p.Model,
 		Source:    source,
 	}
-	if p.APIKey == "" && p.Format != "ollama" {
+	if p.APIKey == "" && !p.KeylessOllama() {
 		result.Reason = reasonLLMProfileNoAPIKey
 		return result
 	}

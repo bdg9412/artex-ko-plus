@@ -11,6 +11,44 @@ export interface HuntingRequest {
   sourcetypes: string[];
 }
 
+export interface HuntingTrendReport {
+  topic_key: string;
+  term: string;
+  title: string;
+  summary: string;
+  reason: string;
+  priority: "high" | "medium" | "review";
+  kind: "kev" | "news";
+  vendor?: string;
+  product?: string;
+  published_at: string;
+  references: { source: string; url: string; title: string }[];
+  asset_matches?: HuntingTrendAssetMatch[];
+  asset_match_count?: number;
+}
+
+export interface HuntingTrendAssetMatch {
+  asset_id: string;
+  label: string;
+  target?: string;
+  observed: string;
+  basis: "kev_product" | "headline_technology";
+  last_seen: string;
+}
+
+export interface HuntingTrendInventory {
+  scanned_assets: number;
+  truncated: boolean;
+  available: boolean;
+}
+
+export interface HuntingTrendCollection {
+  last_attempt: string | null;
+  last_success: string | null;
+  last_error: string;
+  busy: boolean;
+}
+
 export interface HuntingResearchSource {
   id: string;
   url: string;
@@ -139,6 +177,14 @@ const path = "/defensive/hunts";
 const runPath = (id: string) => `${path}/${encodeURIComponent(id)}`;
 
 export const huntingApi = {
+  trends: () =>
+    http<{ reports: HuntingTrendReport[]; collection: HuntingTrendCollection; inventory: HuntingTrendInventory }>(
+      `${path}/trends`,
+      {
+        cache: "no-store",
+      },
+    ),
+  collectTrends: () => http<{ started: boolean }>(`${path}/trends/collect`, { method: "POST" }),
   list: () => http<{ hunts: HuntingRunSummary[]; history_truncated?: boolean }>(path, { cache: "no-store" }),
   get: (id: string, signal?: AbortSignal) => http<HuntingRun>(runPath(id), { cache: "no-store", signal }),
   create: (request: HuntingRequest & { scope_confirmed: true }) =>

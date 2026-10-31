@@ -362,7 +362,8 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS llm_profiles (
     id               BIGSERIAL PRIMARY KEY,
     name             TEXT NOT NULL UNIQUE,
-    format           TEXT NOT NULL CHECK (format IN ('openai','anthropic','openai-responses','ollama','bedrock','bedrock-converse','bedrock-marketplace')),
+    format           TEXT NOT NULL CHECK (format IN ('openai','anthropic','openai-responses','ollama','ollama-remote','bedrock','bedrock-converse','bedrock-marketplace')),
+    ollama_remote    JSONB NOT NULL DEFAULT '{}'::jsonb,
     base_url         TEXT,
     proxy            TEXT,
     model            TEXT NOT NULL,
@@ -425,7 +426,8 @@ ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS streaming    BOOLEAN NOT NULL 
 -- Ollama uses the OpenAI-compatible wire format without an API key.
 ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_format_check;
 ALTER TABLE llm_profiles ADD  CONSTRAINT llm_profiles_format_check
-    CHECK (format IN ('openai','anthropic','openai-responses','ollama','bedrock','bedrock-converse','bedrock-marketplace'));
+    CHECK (format IN ('openai','anthropic','openai-responses','ollama','ollama-remote','bedrock','bedrock-converse','bedrock-marketplace'));
+ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS ollama_remote JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS invoke_schema TEXT NOT NULL DEFAULT '';
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS prompt_style TEXT NOT NULL DEFAULT '';
 ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_invoke_schema_check;
@@ -1681,3 +1683,19 @@ CREATE TABLE IF NOT EXISTS defensive_hunts (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS defensive_hunts_one_active
     ON defensive_hunts ((true)) WHERE status IN ('queued','running');
+
+-- Public threat reports are leads, not authorization to query a log source.
+CREATE TABLE IF NOT EXISTS defensive_hunt_trends (
+    topic_key TEXT PRIMARY KEY,
+    report JSONB NOT NULL CHECK (jsonb_typeof(report)='object'),
+    published_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX IF NOT EXISTS defensive_hunt_trends_recent ON defensive_hunt_trends(published_at DESC);
+CREATE TABLE IF NOT EXISTS defensive_hunt_trend_collection (
+    singleton BOOLEAN PRIMARY KEY DEFAULT true CHECK (singleton),
+    lease_until TIMESTAMPTZ NOT NULL DEFAULT '-infinity',
+    last_attempt TIMESTAMPTZ,
+    last_success TIMESTAMPTZ,
+    last_error TEXT NOT NULL DEFAULT ''
+);

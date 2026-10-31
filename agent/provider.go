@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Autumn-27/artex/llmrec"
+	"github.com/Autumn-27/artex/ollamaendpoint"
 	"github.com/Autumn-27/norma/agentcore"
 	"github.com/Autumn-27/norma/compaction"
 	"github.com/Autumn-27/norma/llm"
@@ -36,10 +37,11 @@ type Config struct {
 	// ProviderID preserves the UI/environment provider name when multiple
 	// backends share the same wire format. Ollama uses OpenAI chat completions;
 	// Bedrock's legacy Claude Messages endpoint uses the Anthropic wire format.
-	ProviderID string
-	BaseURL    string
-	APIKey     string
-	Model      string
+	ProviderID   string
+	OllamaRemote ollamaendpoint.Options
+	BaseURL      string
+	APIKey       string
+	Model        string
 	// Marketplace text endpoints use InvokeModel with a model-specific body.
 	// Empty values select the conservative TGI/raw defaults.
 	InvokeSchema string
@@ -158,11 +160,12 @@ func compactionConfig(windowTokens int) *compaction.Config {
 
 // FromEnv resolves the LLM provider config:
 //
-//	ARTEX_LLM_PROVIDER = anthropic|openai|openai-responses|ollama|bedrock|bedrock-converse (default: inferred from keys)
+//	ARTEX_LLM_PROVIDER = anthropic|openai|openai-responses|ollama|ollama-remote|bedrock|bedrock-converse (default: inferred from keys)
 //	ARTEX_LLM_MODEL    = model id        (default: per provider)
 //	ARTEX_LLM_BASE_URL = endpoint        (optional)
 //	ARTEX_LLM_PROXY    = proxy URL        (optional; http/https/socks5)
 //	ANTHROPIC_API_KEY / OPENAI_API_KEY / BEDROCK_API_KEY = credentials
+//	ARTEX_OLLAMA_REMOTE_TOKEN = optional remote gateway token (never inherits cloud keys)
 func FromEnv() (Config, bool) {
 	prov := strings.ToLower(strings.TrimSpace(os.Getenv("ARTEX_LLM_PROVIDER")))
 	anthKey := os.Getenv("ANTHROPIC_API_KEY")
@@ -217,6 +220,20 @@ func FromEnv() (Config, bool) {
 		if c.APIKey == "" {
 			c.APIKey = strings.TrimSpace(os.Getenv("AWS_BEARER_TOKEN_BEDROCK"))
 		}
+	case "ollama-remote":
+		c.Format = llm.FormatOpenAI
+		c.ContextWindowK = minWindowK
+		c.APIKey = strings.TrimSpace(os.Getenv("ARTEX_OLLAMA_REMOTE_TOKEN"))
+		if c.APIKey != "" {
+			c.OllamaRemote.AuthMode = "bearer"
+		}
+		if c.Model == "" {
+			c.Model = defaultOllamaModel
+		}
+		if _, err := ollamaendpoint.NormalizeURL(c.BaseURL); err != nil {
+			return Config{}, false
+		}
+		c.BaseURL, _ = ollamaendpoint.NormalizeURL(c.BaseURL)
 	case "ollama":
 		c.Format = llm.FormatOpenAI
 		c.ContextWindowK = minWindowK
@@ -294,6 +311,15 @@ func ConfigFrom(provider, model, baseURL, apiKey, proxy string) Config {
 		c.Format = llm.FormatAnthropic
 		c.BaseURL = bedrockBaseURL(c.BaseURL)
 		c.MaxTokens = defaultBedrockMaxTokens
+	case "ollama-remote":
+		c.Format = llm.FormatOpenAI
+		c.ContextWindowK = minWindowK
+		if normalized, err := ollamaendpoint.NormalizeURL(c.BaseURL); err == nil {
+			c.BaseURL = normalized
+		}
+		if c.Model == "" {
+			c.Model = defaultOllamaModel
+		}
 	case "ollama":
 		c.Format = llm.FormatOpenAI
 		c.ContextWindowK = minWindowK
@@ -398,8 +424,9 @@ func isFalsy(s string) bool {
 	return false
 }
 
-// IsOllama reports whether this config uses the local Ollama backend.
-func (c Config) IsOllama() bool { return c.ProviderID == "ollama" }
+// IsOllama identifies both local and remote Ollama protocol behavior.
+func (c Config) IsOllama() bool       { return c.ProviderID == "ollama" || c.IsRemoteOllama() }
+func (c Config) IsRemoteOllama() bool { return c.ProviderID == ollamaendpoint.Remote }
 
 // IsBedrock reports whether this config uses the Bedrock Claude Messages API.
 func (c Config) IsBedrock() bool { return c.ProviderID == "bedrock" }
@@ -413,7 +440,7 @@ func (c Config) IsBedrockMarketplace() bool { return c.ProviderID == "bedrock-ma
 // Provider returns the short provider name.
 func (c Config) Provider() string {
 	if c.IsOllama() {
-		return "ollama"
+		return c.ProviderID
 	}
 	if c.IsBedrock() {
 		return "bedrock"
@@ -437,6 +464,12 @@ func (c Config) Provider() string {
 // limiter lives on the single provider instance — so planner + all workers +
 // main agent (which share this provider) are bounded by one shared rate limit.
 func (c Config) NewProvider() (llm.Provider, error) {
+	if c.IsRemoteOllama() {
+		if err := c.ValidateRemoteOllama(); err != nil {
+			return nil, err
+		}
+		c.BaseURL, _ = ollamaendpoint.NormalizeURL(c.BaseURL)
+	}
 	if c.IsBedrockConverse() {
 		return newBedrockConverseProvider(c)
 	}
@@ -460,10 +493,13 @@ func (c Config) NewProvider() (llm.Provider, error) {
 		}
 	}
 	client, err := quotaAwareHTTPClient(c.Proxy, c.SessionHeaderKey, providerTransportOptions{
-		stripAuth: c.IsOllama(), cyberAccessProgram: cyberProgram,
+		stripAuth: c.IsOllama(), bearerToken: c.ollamaBearerToken(), cyberAccessProgram: cyberProgram,
 	})
 	if err != nil {
 		return nil, err
+	}
+	if c.IsRemoteOllama() {
+		client.CheckRedirect = noOllamaRedirect
 	}
 	lc := llm.Config{
 		Format:     c.Format,
@@ -507,7 +543,11 @@ func (c Config) NewProvider() (llm.Provider, error) {
 		return provider, err
 	}
 	if c.IsOllama() {
-		return newOllamaContextProvider(provider, c, client), nil
+		provider = newOllamaContextProvider(provider, c, client)
+		if c.IsRemoteOllama() {
+			provider = newRemoteOllamaProvider(provider, c)
+		}
+		return provider, nil
 	}
 	if c.IsBedrock() {
 		maxTokens := c.MaxTokens
@@ -589,7 +629,8 @@ type quotaAwareTransport struct {
 	base http.RoundTripper
 	// stripAuth prevents OpenAI credentials or the internal placeholder from
 	// reaching Ollama. Only enabled for an explicit Ollama configuration.
-	stripAuth bool
+	stripAuth   bool
+	bearerToken string
 	// sessionHeaderKey, when non-empty, is the HTTP header name each request
 	// carries; its value is the session id read from the request context. Empty
 	// disables it. See Config.SessionHeaderKey.
@@ -600,7 +641,7 @@ type quotaAwareTransport struct {
 }
 
 func (t quotaAwareTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if t.stripAuth || t.cyberAccessProgram != "" {
+	if t.stripAuth || t.bearerToken != "" || t.cyberAccessProgram != "" {
 		// Clone before mutating so a shared caller request is left untouched.
 		req = req.Clone(req.Context())
 	}
@@ -623,6 +664,9 @@ func (t quotaAwareTransport) RoundTrip(req *http.Request) (*http.Response, error
 	if t.stripAuth {
 		req.Header.Del("Authorization")
 		req.Header.Del("X-Api-Key")
+	}
+	if t.bearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+t.bearerToken)
 	}
 	// When LLM recording is on, the Recorder puts a Capture on the context so the
 	// raw wire bodies can be persisted. This is the only layer that still sees
@@ -729,6 +773,7 @@ func requestBodySnapshot(req *http.Request) string {
 
 type providerTransportOptions struct {
 	stripAuth          bool
+	bearerToken        string
 	cyberAccessProgram string
 }
 
@@ -757,6 +802,7 @@ func quotaAwareHTTPClient(proxy, sessionHeaderKey string, opts ...providerTransp
 	}
 	return &http.Client{Transport: quotaAwareTransport{
 		base: transport, stripAuth: option.stripAuth,
+		bearerToken:        option.bearerToken,
 		sessionHeaderKey:   strings.TrimSpace(sessionHeaderKey),
 		cyberAccessProgram: option.cyberAccessProgram,
 	}}, nil
@@ -807,6 +853,10 @@ func TestConnection(ctx context.Context, c Config) (time.Duration, string, error
 		// A local model may need to load its weights on the first request.
 		timeout = 90 * time.Second
 	}
+	if c.IsRemoteOllama() {
+		o := c.OllamaRemote.Resolved()
+		timeout = time.Duration(o.QueueTimeoutSeconds+o.RequestTimeoutSeconds) * time.Second
+	}
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	// 抓取原始 wire 报文:连接测试最需要看到的就是网关到底回了什么(状态码+响应体),
@@ -822,6 +872,9 @@ func TestConnection(ctx context.Context, c Config) (time.Duration, string, error
 	ctx = transcript.WithSessionID(ctx, "conntest-"+transcript.NewSessionID())
 	start := time.Now()
 	testMaxTokens := 8192
+	if c.IsRemoteOllama() && c.MaxTokens > 0 {
+		testMaxTokens = c.MaxTokens
+	}
 	if c.IsBedrockMarketplace() || c.IsBedrockConverse() {
 		testMaxTokens = c.MaxTokens
 		if testMaxTokens <= 0 {

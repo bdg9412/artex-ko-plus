@@ -3246,7 +3246,9 @@
       "tripped": "已熔断",
       "trippedCooldown": "已熔断 · {cooldown}",
       "degraded": "异常 · 失败 {fails} 次",
-      "ok": "正常"
+      "ok": "正常",
+      "noKnownError": "无已知错误",
+      "remoteHint": "此处显示故障熔断状态。请在配置中检查服务器状态以确认实时连接。"
     },
     "pool": {
       "title": "LLM 轮询 · 故障转移",
@@ -3305,7 +3307,8 @@
         "ollama": "Ollama（本地）",
         "bedrock": "Amazon Bedrock（Claude）",
         "converse": "Amazon Bedrock（Converse · 通用）",
-        "marketplace": "Amazon Bedrock Marketplace（InvokeModel）"
+        "marketplace": "Amazon Bedrock Marketplace（InvokeModel）",
+        "ollamaRemote": "Ollama（远程服务器）"
       },
       "model": {
         "label": "模型",
@@ -3440,6 +3443,29 @@
         "savedActive": "已保存，激活配置即时生效，无需重启",
         "saved": "已保存",
         "saveFailed": "保存失败：{msg}"
+      },
+      "remote": {
+        "urlLabel": "远程 Ollama 服务 URL",
+        "hint": "输入另一台电脑或私有网络中的 Ollama 地址。Bearer 令牌由前置网关验证，建议使用 HTTPS，并始终验证证书。",
+        "authLabel": "认证方式",
+        "authNone": "无认证（私有网络/VPN）",
+        "authBearer": "Bearer 令牌（网关）",
+        "tokenLabel": "网关 Bearer 令牌",
+        "concurrency": "并发请求数",
+        "queueTimeout": "排队超时（秒）",
+        "requestTimeout": "响应超时（秒）",
+        "limitsHint": "默认并发 1、排队 120 秒、响应 600 秒。同一服务器的所有远程配置共享并发限制。",
+        "checkStatus": "检查服务器状态",
+        "statusHint": "仅查询已安装模型和运行状态，不请求加载、下载或生成。响应测试会实际调用模型，可能触发加载。",
+        "responseTest": "响应测试",
+        "invalidUrl": "请输入远程 Ollama 的 HTTP(S) URL，不允许用户信息、查询参数或片段。",
+        "tokenRequired": "请输入此服务器的 Bearer 令牌。更改服务器地址后需要重新输入令牌。",
+        "invalidLimits": "并发数应为 1~8，排队超时为 1~3600 秒，响应超时为 5~7200 秒。",
+        "statusResult": "检查时间：{time} · 模型已安装：{available} · 模型已加载：{loaded}",
+        "yes": "是",
+        "no": "否",
+        "unknown": "未知",
+        "tokenPlaceholder": "网关签发的令牌"
       }
     },
     "retryLayer": {
@@ -3779,7 +3805,10 @@
       "staleHelp": "此草稿与当前生成标准不一致。重新生成前不能复制到防御计划。",
       "attackTitle": "攻击场景",
       "step": "攻击步骤 {n}",
-      "basis": { "observed": "已观察事实", "hypothetical": "假设路径" },
+      "basis": {
+        "observed": "已观察事实",
+        "hypothetical": "假设路径"
+      },
       "evidence": "证据",
       "detectionTitle": "分阶段检测设计",
       "stage": "检测阶段 {n}",
@@ -3787,7 +3816,11 @@
       "linkedAttack": "对应攻击步骤",
       "equipmentTitle": "所需设备候选",
       "equipmentHelp": "列出检测可能需要的设备类型；现场部署情况须以其他证据确认。",
-      "presence": { "unknown": "部署未确认", "present": "已确认部署", "absent": "已确认未部署" },
+      "presence": {
+        "unknown": "部署未确认",
+        "present": "已确认部署",
+        "absent": "已确认未部署"
+      },
       "noEquipment": "未提出设备候选。",
       "logsTitle": "所需日志",
       "fieldsTitle": "所需字段",

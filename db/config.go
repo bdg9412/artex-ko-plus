@@ -7,23 +7,26 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/Autumn-27/artex/ollamaendpoint"
 )
 
 // ---------- LLM profiles ----------
 
 type LLMProfile struct {
-	ID            int64   `json:"id"`
-	Name          string  `json:"name"`
-	Format        string  `json:"format"`
-	BaseURL       string  `json:"base_url,omitempty"`
-	Proxy         string  `json:"proxy,omitempty"` // LLM 出站代理(http/https/socks5);空=用环境变量
-	Model         string  `json:"model"`
-	InvokeSchema  string  `json:"invoke_schema,omitempty"` // Marketplace: tgi(default) or deepseek
-	PromptStyle   string  `json:"prompt_style,omitempty"`  // Marketplace: raw(default), deepseek, qwen, llama
-	APIKey        string  `json:"-"`                       // never serialized to UI
-	APIKeyHint    string  `json:"api_key_hint,omitempty"`
-	RatePerSecond float64 `json:"rate_per_second"`
-	RatePerMinute float64 `json:"rate_per_minute"`
+	OllamaRemote  ollamaendpoint.Options `json:"ollama_remote,omitempty"`
+	ID            int64                  `json:"id"`
+	Name          string                 `json:"name"`
+	Format        string                 `json:"format"`
+	BaseURL       string                 `json:"base_url,omitempty"`
+	Proxy         string                 `json:"proxy,omitempty"` // LLM 出站代理(http/https/socks5);空=用环境变量
+	Model         string                 `json:"model"`
+	InvokeSchema  string                 `json:"invoke_schema,omitempty"` // Marketplace: tgi(default) or deepseek
+	PromptStyle   string                 `json:"prompt_style,omitempty"`  // Marketplace: raw(default), deepseek, qwen, llama
+	APIKey        string                 `json:"-"`                       // never serialized to UI
+	APIKeyHint    string                 `json:"api_key_hint,omitempty"`
+	RatePerSecond float64                `json:"rate_per_second"`
+	RatePerMinute float64                `json:"rate_per_minute"`
 	// ContextWindowK is the model's context window in K tokens, used to size
 	// compaction thresholds. 0 = use a 200K default; capped at 1000 (1M).
 	ContextWindowK int `json:"context_window_k"`
@@ -85,19 +88,24 @@ type RetryOverride struct {
 // profileCols is the read column list (hint variant, no api key) shared by the
 // list query; profileColsKey is the same with api_key for the single-row loads.
 const profileRetryCols = `COALESCE(retry_connect_attempts,0),COALESCE(retry_connect_interval_ms,0),COALESCE(retry_empty_attempts,0),COALESCE(retry_empty_interval_ms,0),COALESCE(retry_stream_attempts,0),COALESCE(retry_stream_interval_ms,0)`
-const profileCols = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key_hint,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols + `,COALESCE(cyber_access_program,''),COALESCE(invoke_schema,''),COALESCE(prompt_style,'')`
-const profileColsKey = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols + `,COALESCE(cyber_access_program,''),COALESCE(invoke_schema,''),COALESCE(prompt_style,'')`
+const profileCols = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key_hint,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols + `,COALESCE(cyber_access_program,''),COALESCE(invoke_schema,''),COALESCE(prompt_style,''),COALESCE(ollama_remote,'{}')`
+const profileColsKey = `id,name,format,COALESCE(base_url,''),COALESCE(proxy,''),model,COALESCE(api_key,''),rate_per_second,rate_per_minute,context_window_k,COALESCE(reasoning_effort,''),is_default,priority,pool_exclude,COALESCE(thinking_type,''),COALESCE(streaming,true),COALESCE(max_tokens,0),COALESCE(max_tokens_field,''),COALESCE(session_header_key,''),` + profileRetryCols + `,COALESCE(cyber_access_program,''),COALESCE(invoke_schema,''),COALESCE(prompt_style,''),COALESCE(ollama_remote,'{}')`
 
 // scanProfile reads one row in the profileCols / profileColsKey column order. The
 // 7th column lands in APIKeyHint or APIKey depending on which list the caller used.
 func scanProfile(sc interface{ Scan(...any) error }, into *string, p *LLMProfile) error {
-	return sc.Scan(&p.ID, &p.Name, &p.Format, &p.BaseURL, &p.Proxy, &p.Model, into,
+	var remote []byte
+	err := sc.Scan(&p.ID, &p.Name, &p.Format, &p.BaseURL, &p.Proxy, &p.Model, into,
 		&p.RatePerSecond, &p.RatePerMinute, &p.ContextWindowK, &p.ReasoningEffort, &p.IsDefault, &p.Priority, &p.PoolExclude, &p.ThinkingType, &p.Streaming,
 		&p.MaxTokens, &p.MaxTokensField, &p.SessionHeaderKey,
 		&p.Retry.Connect.Attempts, &p.Retry.Connect.IntervalMS,
 		&p.Retry.Empty.Attempts, &p.Retry.Empty.IntervalMS,
 		&p.Retry.Stream.Attempts, &p.Retry.Stream.IntervalMS,
-		&p.CyberAccessProgram, &p.InvokeSchema, &p.PromptStyle)
+		&p.CyberAccessProgram, &p.InvokeSchema, &p.PromptStyle, &remote)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(remote, &p.OllamaRemote)
 }
 
 // ValidCyberAccessProgram limits the request option to Responses API profiles.
@@ -162,7 +170,7 @@ func (d *DB) ProfileByID(id int64) (*LLMProfile, error) {
 // walk the slice front to back.
 func (d *DB) PoolProfiles() ([]*LLMProfile, error) {
 	rows, err := d.Query(`SELECT ` + profileColsKey + ` FROM llm_profiles
-WHERE (format='ollama' OR COALESCE(api_key,'') <> '') AND (is_default OR NOT pool_exclude)
+WHERE (format IN ('ollama','ollama-remote') OR COALESCE(api_key,'') <> '') AND (is_default OR NOT pool_exclude)
 ORDER BY is_default DESC, priority DESC, id ASC`)
 	if err != nil {
 		return nil, err
@@ -182,7 +190,38 @@ ORDER BY is_default DESC, priority DESC, id ASC`)
 // SaveProfile inserts (id==0) or updates a profile. Empty apiKey on update keeps existing.
 var ErrBedrockAPIKeyRequired = errors.New("Bedrock 프로필에는 API Key가 필요하며, 제공자를 바꿀 때는 새 제공자의 키를 입력해야 합니다")
 
+var ErrRemoteOllamaProfile = errors.New("invalid remote Ollama profile")
+
 func (d *DB) SaveProfile(p *LLMProfile) (int64, error) {
+	if p.Format == ollamaendpoint.Remote {
+		normalized, err := ollamaendpoint.NormalizeURL(p.BaseURL)
+		if err != nil {
+			return 0, fmt.Errorf("%w: %v", ErrRemoteOllamaProfile, err)
+		}
+		p.BaseURL = normalized
+		if err := p.OllamaRemote.Validate(); err != nil {
+			return 0, fmt.Errorf("%w: %v", ErrRemoteOllamaProfile, err)
+		}
+		p.OllamaRemote = p.OllamaRemote.Resolved()
+		if p.OllamaRemote.AuthMode == "none" {
+			p.APIKey, p.APIKeyHint = "", ""
+		} else if p.APIKey == "" {
+			var previous *LLMProfile
+			if p.ID != 0 {
+				previous, err = d.ProfileByID(p.ID)
+				if err != nil {
+					return 0, err
+				}
+			}
+			if previous == nil || !ollamaendpoint.ReuseKey(previous.Format, previous.BaseURL, previous.OllamaRemote, p.BaseURL, p.OllamaRemote) || previous.APIKey == "" {
+				return 0, fmt.Errorf("%w: Bearer token is required for this server", ErrRemoteOllamaProfile)
+			}
+			p.APIKey = previous.APIKey
+		}
+	} else {
+		p.OllamaRemote = ollamaendpoint.Options{}
+	}
+	remoteJSON, _ := json.Marshal(p.OllamaRemote)
 	if !ValidCyberAccessProgram(p.Format, p.CyberAccessProgram) {
 		return 0, fmt.Errorf("cyber_access_program must be empty or a supported value for openai-responses")
 	}
@@ -201,11 +240,14 @@ func (d *DB) SaveProfile(p *LLMProfile) (int64, error) {
 	if bedrockFormat(p.Format) && p.ID == 0 && p.APIKey == "" {
 		return 0, ErrBedrockAPIKeyRequired
 	}
-	if p.ID != 0 && (bedrockFormat(p.Format) || p.APIKey == "") && p.Format != "ollama" {
+	if p.ID != 0 && (bedrockFormat(p.Format) || p.APIKey == "") && p.Format != "ollama" && p.Format != ollamaendpoint.Remote {
 		var previousFormat, previousKey string
 		err := d.QueryRow(`SELECT format,COALESCE(api_key,'') FROM llm_profiles WHERE id=$1`, p.ID).Scan(&previousFormat, &previousKey)
 		if err != nil {
 			return 0, err
+		}
+		if previousFormat == ollamaendpoint.Remote && previousFormat != p.Format && p.APIKey == "" {
+			return 0, fmt.Errorf("%w: enter a new credential when changing provider", ErrRemoteOllamaProfile)
 		}
 		if p.APIKey == "" && (previousFormat != p.Format || (bedrockFormat(p.Format) && previousKey == "")) &&
 			(bedrockFormat(previousFormat) || bedrockFormat(p.Format)) {
@@ -219,27 +261,27 @@ func (d *DB) SaveProfile(p *LLMProfile) (int64, error) {
 	r := p.Retry.Clamped()
 	if p.ID == 0 {
 		var id int64
-		err := d.QueryRow(`INSERT INTO llm_profiles(name,format,base_url,proxy,model,api_key,api_key_hint,rate_per_second,rate_per_minute,context_window_k,reasoning_effort,priority,pool_exclude,thinking_type,streaming,max_tokens,max_tokens_field,session_header_key,retry_connect_attempts,retry_connect_interval_ms,retry_empty_attempts,retry_empty_interval_ms,retry_stream_attempts,retry_stream_interval_ms,cyber_access_program,invoke_schema,prompt_style)
-VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),$5,NULLIF($6,''),NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27) RETURNING id`,
+		err := d.QueryRow(`INSERT INTO llm_profiles(name,format,base_url,proxy,model,api_key,api_key_hint,rate_per_second,rate_per_minute,context_window_k,reasoning_effort,priority,pool_exclude,thinking_type,streaming,max_tokens,max_tokens_field,session_header_key,retry_connect_attempts,retry_connect_interval_ms,retry_empty_attempts,retry_empty_interval_ms,retry_stream_attempts,retry_stream_interval_ms,cyber_access_program,invoke_schema,prompt_style,ollama_remote)
+VALUES ($1,$2,NULLIF($3,''),NULLIF($4,''),$5,NULLIF($6,''),NULLIF($7,''),$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id`,
 			p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.APIKey, hint, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle).Scan(&id)
+			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, string(remoteJSON)).Scan(&id)
 		return id, err
 	}
-	if p.Format == "ollama" {
-		_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,api_key=NULL,api_key_hint=NULL,rate_per_second=$6,rate_per_minute=$7,context_window_k=$8,reasoning_effort=$9,priority=$10,pool_exclude=$11,thinking_type=$12,streaming=$13,max_tokens=$14,max_tokens_field=$15,session_header_key=$16,retry_connect_attempts=$17,retry_connect_interval_ms=$18,retry_empty_attempts=$19,retry_empty_interval_ms=$20,retry_stream_attempts=$21,retry_stream_interval_ms=$22,cyber_access_program=$23,invoke_schema=$24,prompt_style=$25 WHERE id=$26`,
+	if p.Format == "ollama" || (p.Format == ollamaendpoint.Remote && p.OllamaRemote.AuthMode == "none") {
+		_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,api_key=NULL,api_key_hint=NULL,rate_per_second=$6,rate_per_minute=$7,context_window_k=$8,reasoning_effort=$9,priority=$10,pool_exclude=$11,thinking_type=$12,streaming=$13,max_tokens=$14,max_tokens_field=$15,session_header_key=$16,retry_connect_attempts=$17,retry_connect_interval_ms=$18,retry_empty_attempts=$19,retry_empty_interval_ms=$20,retry_stream_attempts=$21,retry_stream_interval_ms=$22,cyber_access_program=$23,invoke_schema=$24,prompt_style=$25,ollama_remote=$26 WHERE id=$27`,
 			p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, p.ID)
+			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, string(remoteJSON), p.ID)
 		return p.ID, err
 	}
 	if p.APIKey == "" {
-		_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,rate_per_second=$6,rate_per_minute=$7,context_window_k=$8,reasoning_effort=$9,priority=$10,pool_exclude=$11,thinking_type=$12,streaming=$13,max_tokens=$14,max_tokens_field=$15,session_header_key=$16,retry_connect_attempts=$17,retry_connect_interval_ms=$18,retry_empty_attempts=$19,retry_empty_interval_ms=$20,retry_stream_attempts=$21,retry_stream_interval_ms=$22,cyber_access_program=$23,invoke_schema=$24,prompt_style=$25 WHERE id=$26`,
+		_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,rate_per_second=$6,rate_per_minute=$7,context_window_k=$8,reasoning_effort=$9,priority=$10,pool_exclude=$11,thinking_type=$12,streaming=$13,max_tokens=$14,max_tokens_field=$15,session_header_key=$16,retry_connect_attempts=$17,retry_connect_interval_ms=$18,retry_empty_attempts=$19,retry_empty_interval_ms=$20,retry_stream_attempts=$21,retry_stream_interval_ms=$22,cyber_access_program=$23,invoke_schema=$24,prompt_style=$25,ollama_remote=$26 WHERE id=$27`,
 			p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, p.ID)
+			r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, string(remoteJSON), p.ID)
 		return p.ID, err
 	}
-	_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,api_key=$6,api_key_hint=$7,rate_per_second=$8,rate_per_minute=$9,context_window_k=$10,reasoning_effort=$11,priority=$12,pool_exclude=$13,thinking_type=$14,streaming=$15,max_tokens=$16,max_tokens_field=$17,session_header_key=$18,retry_connect_attempts=$19,retry_connect_interval_ms=$20,retry_empty_attempts=$21,retry_empty_interval_ms=$22,retry_stream_attempts=$23,retry_stream_interval_ms=$24,cyber_access_program=$25,invoke_schema=$26,prompt_style=$27 WHERE id=$28`,
+	_, err := d.Exec(`UPDATE llm_profiles SET name=$1,format=$2,base_url=NULLIF($3,''),proxy=NULLIF($4,''),model=$5,api_key=$6,api_key_hint=$7,rate_per_second=$8,rate_per_minute=$9,context_window_k=$10,reasoning_effort=$11,priority=$12,pool_exclude=$13,thinking_type=$14,streaming=$15,max_tokens=$16,max_tokens_field=$17,session_header_key=$18,retry_connect_attempts=$19,retry_connect_interval_ms=$20,retry_empty_attempts=$21,retry_empty_interval_ms=$22,retry_stream_attempts=$23,retry_stream_interval_ms=$24,cyber_access_program=$25,invoke_schema=$26,prompt_style=$27,ollama_remote=$28 WHERE id=$29`,
 		p.Name, p.Format, p.BaseURL, p.Proxy, p.Model, p.APIKey, hint, p.RatePerSecond, p.RatePerMinute, p.ContextWindowK, p.ReasoningEffort, p.Priority, p.PoolExclude, p.ThinkingType, p.Streaming, p.MaxTokens, p.MaxTokensField, p.SessionHeaderKey,
-		r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, p.ID)
+		r.Connect.Attempts, r.Connect.IntervalMS, r.Empty.Attempts, r.Empty.IntervalMS, r.Stream.Attempts, r.Stream.IntervalMS, p.CyberAccessProgram, p.InvokeSchema, p.PromptStyle, string(remoteJSON), p.ID)
 	return p.ID, err
 }
 
@@ -1144,4 +1186,7 @@ ON CONFLICT (agent_id,resource_kind,resource_id,mcp_tool_name) DO UPDATE SET ena
 	}
 	_, err := d.Exec(`DELETE FROM agent_visibility WHERE agent_id=$1 AND resource_kind=$2 AND resource_id=$3`, agentID, kind, resourceID)
 	return err
+}
+func (p *LLMProfile) KeylessOllama() bool {
+	return p.Format == "ollama" || (p.Format == ollamaendpoint.Remote && p.OllamaRemote.Resolved().AuthMode == "none")
 }

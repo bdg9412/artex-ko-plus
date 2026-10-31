@@ -25,6 +25,7 @@ import (
 
 	"github.com/Autumn-27/artex/agent"
 	"github.com/Autumn-27/artex/db"
+	"github.com/Autumn-27/artex/ollamaendpoint"
 	"github.com/Autumn-27/norma/llm"
 	"github.com/Autumn-27/norma/skill"
 )
@@ -1915,7 +1916,7 @@ func (s *Server) pgSaveProfile(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := pg.SaveProfile(&p)
 	if err != nil {
-		if errors.Is(err, db.ErrBedrockAPIKeyRequired) {
+		if errors.Is(err, db.ErrBedrockAPIKeyRequired) || errors.Is(err, db.ErrRemoteOllamaProfile) {
 			writeErr(w, 400, err.Error())
 		} else {
 			writeErr(w, 500, err.Error())
@@ -2077,17 +2078,33 @@ func (s *Server) pgLLMPoolReset(w http.ResponseWriter, r *http.Request) {
 // the OpenAI path, it falls back to the OpenAI endpoint at the stripped root.
 func (s *Server) pgListModels(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Provider  string `json:"provider"` // "openai" | "anthropic"
-		BaseURL   string `json:"base_url"`
-		APIKey    string `json:"api_key"`
-		Proxy     string `json:"proxy"`
-		ProfileID *int64 `json:"profile_id"` // fallback: use stored key from this profile
+		OllamaRemote ollamaendpoint.Options `json:"ollama_remote"`
+		Provider     string                 `json:"provider"` // "openai" | "anthropic"
+		BaseURL      string                 `json:"base_url"`
+		APIKey       string                 `json:"api_key"`
+		Proxy        string                 `json:"proxy"`
+		ProfileID    *int64                 `json:"profile_id"` // fallback: use stored key from this profile
 	}
 	if err := decode(r, &req); err != nil {
 		writeErr(w, 400, err.Error())
 		return
 	}
 	provider := strings.TrimSpace(req.Provider)
+	if provider == ollamaendpoint.Remote {
+		cfg := agent.ConfigFrom(provider, "", req.BaseURL, req.APIKey, req.Proxy)
+		cfg.OllamaRemote = req.OllamaRemote
+		if err := s.resolveRemoteOllamaKey(&cfg, req.ProfileID); err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		status, err := agent.CheckOllamaStatus(r.Context(), cfg)
+		if err != nil {
+			writeJSON(w, 200, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "models": status.Models})
+		return
+	}
 	if provider == "bedrock" || provider == "bedrock-converse" || provider == "bedrock-marketplace" {
 		// Bedrock Runtime does not expose a models-list API for these routes.
 		// The UI accepts an explicit model or inference-profile ID instead.
