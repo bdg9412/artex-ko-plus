@@ -3,6 +3,7 @@
 import * as React from "react";
 
 import {
+  ChevronDownIcon,
   Loader2Icon,
   PlugZapIcon,
   PlusIcon,
@@ -29,6 +30,16 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { type CyberAccessProgram, daybreakEditorState, daybreakRequestProgram } from "@/lib/daybreak-profile";
+import {
+  ORCAROUTER_API_BASE,
+  ORCAROUTER_CYBER_MODELS,
+  ORCAROUTER_CYBER_MODELS_RECOMMENDED,
+  ORCAROUTER_CYBER_PAGE,
+  ORCAROUTER_DEFAULT_MODEL,
+  optionsFromIDs,
+  type SelectorOptions,
+} from "@/lib/orcarouter-catalog";
+import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride } from "@/lib/types";
 import { canKeepRemoteOllamaToken, isOllamaFormat, remoteOllamaOptions, remoteOllamaURL } from "@/lib/ollama-profile";
 import type { LLMPoolMember, LLMPoolStatus, LLMProfile, LLMRetryOverride, OllamaStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -59,6 +70,7 @@ const MODEL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
   bedrock: "us.anthropic.claude-sonnet-4-6",
   "bedrock-converse": "예: zai.glm-4.7 또는 사용 중인 Bedrock 모델 ID",
   "bedrock-marketplace": "arn:aws:sagemaker:us-east-1:123456789012:endpoint/my-model",
+  orcarouter: ORCAROUTER_DEFAULT_MODEL,
 };
 const BASE_URL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
   anthropic: "https://api.openai.com/v1",
@@ -69,6 +81,7 @@ const BASE_URL_PLACEHOLDERS: Record<LLMProfile["format"], string> = {
   bedrock: BEDROCK_BASE_URL_EXAMPLE,
   "bedrock-converse": BEDROCK_CONVERSE_BASE_URL_EXAMPLE,
   "bedrock-marketplace": MARKETPLACE_BASE_URL_EXAMPLE,
+  orcarouter: ORCAROUTER_API_BASE,
 };
 const BASE_URL_LABEL_KEYS = {
   anthropic: "profile.baseUrl.label",
@@ -79,6 +92,7 @@ const BASE_URL_LABEL_KEYS = {
   bedrock: "profile.baseUrl.bedrockLabel",
   "bedrock-converse": "profile.baseUrl.converseLabel",
   "bedrock-marketplace": "profile.baseUrl.marketplaceLabel",
+  orcarouter: "profile.baseUrl.label",
 } as const;
 const MAX_TOKENS_HINT_KEYS = {
   anthropic: "profile.maxTokens.hint",
@@ -89,6 +103,7 @@ const MAX_TOKENS_HINT_KEYS = {
   bedrock: "profile.maxTokens.bedrockHint",
   "bedrock-converse": "profile.maxTokens.converseHint",
   "bedrock-marketplace": "profile.maxTokens.marketplaceHint",
+  orcarouter: "profile.maxTokens.hint",
 } as const;
 const RATE_HINT_KEYS = {
   anthropic: "profile.rateHint",
@@ -99,6 +114,7 @@ const RATE_HINT_KEYS = {
   bedrock: "profile.rateHint",
   "bedrock-converse": "profile.rateHint",
   "bedrock-marketplace": "profile.rateHintMarketplace",
+  orcarouter: "profile.rateHint",
 } as const;
 const fromStore = (v?: string) => (v ? v : NONE);
 const toStore = (v: string) => (v === NONE ? "" : v);
@@ -305,6 +321,88 @@ function PoolSheet({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// OrcaRouter Cyber Inference 모델 선택기
+//
+// 옵션은 서버가 실제 카탈로그(GET /v1/models?capability=chat)에서 가져온 목록만
+// 쓴다. 직접 입력 칸이 아니라 펼쳐지는 목록이며, 검색 성공 시 그 결과가 유일한
+// 기준이고 실패하면 검증된 소규모 시드만 'degraded'로 표시한다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function OrcaRouterModelPicker({
+  value,
+  options,
+  loading,
+  onRefresh,
+  onSelect,
+  labels,
+}: {
+  value: string;
+  options: SelectorOptions | null;
+  loading: boolean;
+  onRefresh: () => void;
+  onSelect: (id: string) => void;
+  labels: { trigger: string; refresh: string; empty: string; degraded: string };
+}) {
+  const [open, setOpen] = React.useState(false);
+  const ids = options?.ids ?? [];
+  return (
+    <div className="flex gap-2">
+      <Popover open={open} onOpenChange={setOpen} modal>
+        <PopoverTrigger asChild>
+          <Button
+            id="p-model"
+            type="button"
+            variant="outline"
+            className="min-w-0 flex-1 justify-between font-mono font-normal"
+            aria-label="OrcaRouter model"
+          >
+            <span className="truncate">{labels.trigger}</span>
+            <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="max-h-72 w-80 gap-0 overflow-y-auto overscroll-contain border border-border bg-popover p-1"
+        >
+          {options?.degraded && <p className="border-b px-2 py-1.5 text-muted-foreground text-xs">{labels.degraded}</p>}
+          {ids.length === 0 && <p className="px-2 py-1.5 text-muted-foreground text-xs">{labels.empty}</p>}
+          {ids.map((id) => (
+            <button
+              key={id}
+              type="button"
+              data-orca-model={id}
+              aria-current={id === value ? "true" : undefined}
+              className={cn(
+                "w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground",
+                id === value && "bg-accent/60",
+              )}
+              onClick={() => {
+                onSelect(id);
+                setOpen(false);
+              }}
+            >
+              {id}
+            </button>
+          ))}
+        </PopoverContent>
+      </Popover>
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className="shrink-0"
+        disabled={loading}
+        onClick={onRefresh}
+        title={labels.refresh}
+        aria-label={labels.refresh}
+      >
+        {loading ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
+      </Button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 模型配置抽屉（新建 / 编辑共用同一套表单）
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -355,6 +453,9 @@ function ProfileSheet({
   const [models, setModels] = React.useState<string[]>([]);
   const [loadingModels, setLoadingModels] = React.useState(false);
   const [modelsOpen, setModelsOpen] = React.useState(false);
+  // OrcaRouter keeps its discovered catalog separate: the options that reach the
+  // model selector are capability-filtered there, never a raw string list.
+  const [orcaCatalog, setOrcaCatalog] = React.useState<SelectorOptions | null>(null);
 
   // 思考开关 / 上限字段名 / 思考强度三组选项的标签走 i18n，故在组件内按当前语言构造。
   const THINKING_TYPES: { value: string; label: string }[] = [
@@ -427,7 +528,12 @@ function ProfileSheet({
   }, [statusInput]);
   const marketplace = format === "bedrock-marketplace";
   const converse = format === "bedrock-converse";
+  const isOrcaRouter = format === "orcarouter";
   const singleResponse = marketplace || converse;
+  const bedrockKeyFormat = format === "bedrock" || converse || marketplace;
+  let apiKeyPlaceholder = "sk-…";
+  if (isOrcaRouter) apiKeyPlaceholder = "sk-orca-…";
+  else if (bedrockKeyFormat) apiKeyPlaceholder = t("profile.apiKey.bedrockPlaceholder");
   let apiKeyPlaceholder = "sk-…";
   if (format === "bedrock" || converse || marketplace) apiKeyPlaceholder = t("profile.apiKey.bedrockPlaceholder");
   if (remote) apiKeyPlaceholder = t("profile.remote.tokenPlaceholder");
@@ -456,6 +562,12 @@ function ProfileSheet({
     setPromptStyle("raw");
     setStreaming(next !== "bedrock-marketplace" && next !== "bedrock-converse");
     if (next !== "openai-responses") setDaybreakEnabled(false);
+    if (next === "orcarouter") {
+      // Named provider defaults: its own API origin and its default routing model.
+      applyOrcaRouterDefaults();
+      return;
+    }
+    if (next === "ollama") {
     if (isOllamaFormat(next)) {
       setCw("32");
       setThinkingType(NONE);
@@ -480,22 +592,38 @@ function ProfileSheet({
     }
     setLoadingModels(true);
     setModels([]);
+    setOrcaCatalog(null);
     try {
       const r = await api.fetchLLMModels(format, baseUrl, apiKey, proxy, profileId, remote ? remoteOptions : undefined);
       if (r.ok && r.models && r.models.length > 0) {
         setModels(r.models);
+        if (isOrcaRouter) setOrcaCatalog(optionsFromIDs(r.models));
         setModelsOpen(true);
         toast.success(t("profile.toast.modelsLoaded", { n: r.models.length }));
       } else {
-        toast.error(t("profile.toast.loadModelsFailed", { error: r.error ?? t("profile.toast.noModels") }));
+        const error = r.error ?? t("profile.toast.noModels");
+        // OrcaRouter keeps a small verified outage seed so a fresh install stays
+        // usable; the selector marks it degraded instead of falling back to a
+        // free-text field.
+        if (isOrcaRouter) setOrcaCatalog(optionsFromIDs([], { degraded: true, error }));
+        toast.error(t("profile.toast.loadModelsFailed", { error }));
       }
     } catch (e) {
-      toast.error(t("profile.toast.loadModelsError", { msg: (e as Error).message }));
+      const msg = (e as Error).message;
+      if (isOrcaRouter) setOrcaCatalog(optionsFromIDs([], { degraded: true, error: msg }));
+      toast.error(t("profile.toast.loadModelsError", { msg }));
     } finally {
       setLoadingModels(false);
     }
   }
 
+  // Switching to OrcaRouter rewrites the draft to the provider's own defaults so
+  // the user never has to type a base URL or a model id by hand.
+  function applyOrcaRouterDefaults() {
+    setBaseUrl(ORCAROUTER_API_BASE);
+    setModel(ORCAROUTER_DEFAULT_MODEL);
+    setModels([]);
+    setOrcaCatalog(null);
   function remoteError() {
     if (!remote) return "";
     if (!remoteOllamaURL(baseUrl)) return t("profile.remote.invalidUrl");
@@ -711,6 +839,7 @@ function ProfileSheet({
                   <SelectItem value="ollama">{t("profile.format.ollama")}</SelectItem>
                   <SelectItem value="ollama-remote">{t("profile.format.ollamaRemote")}</SelectItem>
                   <SelectItem value="bedrock-converse">{t("profile.format.converse")}</SelectItem>
+                  <SelectItem value="orcarouter">{t("profile.format.orcarouter")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -718,60 +847,82 @@ function ProfileSheet({
 
           <div className="grid gap-2">
             <Label htmlFor="p-model">{t(marketplace ? "profile.model.marketplaceLabel" : "profile.model.label")}</Label>
-            <div className="flex gap-2">
-              <Input
-                id="p-model"
-                className="font-mono"
-                placeholder={MODEL_PLACEHOLDERS[format]}
+            {isOrcaRouter ? (
+              <OrcaRouterModelPicker
                 value={model}
-                onChange={(e) => {
-                  const nextModel = e.target.value;
+                options={orcaCatalog}
+                loading={loadingModels}
+                onRefresh={loadModels}
+                onSelect={(id) => {
+                  setModel(id);
                   setTestError("");
-                  if (marketplace) {
-                    const previousAutoURL = marketplaceBaseURLFromARN(model);
-                    const nextAutoURL = marketplaceBaseURLFromARN(nextModel);
-                    if (nextAutoURL && (!baseUrl.trim() || baseUrl === previousAutoURL)) setBaseUrl(nextAutoURL);
-                  }
-                  setModel(nextModel);
+                }}
+                labels={{
+                  trigger: model || t("profile.model.orcaPlaceholder"),
+                  refresh: t("profile.model.loadTitle"),
+                  empty: t("profile.model.orcaEmpty"),
+                  degraded: t("profile.model.orcaDegraded"),
                 }}
               />
-              {/* modal: 这个 Popover 的内容被 portal 到 <body>，在 Sheet 的滚动锁之外，
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  id="p-model"
+                  className="font-mono"
+                  placeholder={MODEL_PLACEHOLDERS[format]}
+                  value={model}
+                  onChange={(e) => {
+                    const nextModel = e.target.value;
+                    setTestError("");
+                    if (marketplace) {
+                      const previousAutoURL = marketplaceBaseURLFromARN(model);
+                      const nextAutoURL = marketplaceBaseURLFromARN(nextModel);
+                      if (nextAutoURL && (!baseUrl.trim() || baseUrl === previousAutoURL)) setBaseUrl(nextAutoURL);
+                    }
+                    setModel(nextModel);
+                  }}
+                />
+                {/* modal: 这个 Popover 的内容被 portal 到 <body>，在 Sheet 的滚动锁之外，
                   不加 modal 时列表能渲染却滚不动。modal 让它自己持有最上层滚动锁。 */}
-              {format !== "bedrock" && !converse && !marketplace && (
-                <Popover open={modelsOpen} onOpenChange={setModelsOpen} modal>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      className="shrink-0"
-                      disabled={loadingModels}
-                      onClick={loadModels}
-                      title={t("profile.model.loadTitle")}
-                    >
-                      {loadingModels ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
-                    </Button>
-                  </PopoverTrigger>
-                  {models.length > 0 && (
-                    <PopoverContent className="max-h-72 w-72 gap-0 overflow-y-auto overscroll-contain p-1" align="end">
-                      {models.map((m) => (
-                        <button
-                          key={m}
-                          type="button"
-                          className="w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
-                          onClick={() => {
-                            setModel(m);
-                            setModelsOpen(false);
-                          }}
-                        >
-                          {m}
-                        </button>
-                      ))}
-                    </PopoverContent>
-                  )}
-                </Popover>
-              )}
-            </div>
+                {format !== "bedrock" && !converse && !marketplace && (
+                  <Popover open={modelsOpen} onOpenChange={setModelsOpen} modal>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0"
+                        disabled={loadingModels}
+                        onClick={loadModels}
+                        title={t("profile.model.loadTitle")}
+                      >
+                        {loadingModels ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
+                      </Button>
+                    </PopoverTrigger>
+                    {models.length > 0 && (
+                      <PopoverContent
+                        className="max-h-72 w-72 gap-0 overflow-y-auto overscroll-contain p-1"
+                        align="end"
+                      >
+                        {models.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="w-full shrink-0 rounded-md px-2 py-1.5 text-left font-mono text-xs hover:bg-accent hover:text-accent-foreground"
+                            onClick={() => {
+                              setModel(m);
+                              setModelsOpen(false);
+                            }}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </PopoverContent>
+                    )}
+                  </Popover>
+                )}
+              </div>
+            )}
           </div>
 
           {ollama && <p className="-mt-2 text-muted-foreground text-xs">{t("profile.model.ollamaHint")}</p>}
@@ -785,6 +936,41 @@ function ProfileSheet({
               {marketplaceRegionFromARN(model) && (
                 <p>{t("profile.marketplace.region", { region: marketplaceRegionFromARN(model) })}</p>
               )}
+            </div>
+          )}
+
+          {isOrcaRouter && (
+            <div className="-mt-2 grid gap-2 rounded-lg border p-3 text-xs">
+              <p className="text-muted-foreground">{t("profile.orcarouter.intro")}</p>
+              <div className="flex flex-wrap gap-x-3 gap-y-1">
+                <a
+                  className="underline underline-offset-2"
+                  href={ORCAROUTER_CYBER_PAGE}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  OrcaRouter Cyber
+                </a>
+                <a
+                  className="underline underline-offset-2"
+                  href={ORCAROUTER_CYBER_MODELS}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t("profile.orcarouter.modelsLink")}
+                </a>
+              </div>
+              <div className="grid gap-1">
+                <p className="font-medium">{t("profile.orcarouter.defaultLabel")}</p>
+                <code className="font-mono">{ORCAROUTER_DEFAULT_MODEL}</code>
+                <p className="font-medium">{t("profile.orcarouter.cyberLabel")}</p>
+                {ORCAROUTER_CYBER_MODELS_RECOMMENDED.map((model) => (
+                  <p key={model.id} className="text-muted-foreground">
+                    <code className="font-mono">{model.id}</code> — {model.label}
+                  </p>
+                ))}
+                <p className="text-muted-foreground">{t("profile.orcarouter.cyberHint")}</p>
+              </div>
             </div>
           )}
 
@@ -938,6 +1124,19 @@ function ProfileSheet({
               />
               {(format === "bedrock" || converse || marketplace) && (
                 <p className="text-muted-foreground text-xs">{t("profile.apiKey.bedrockHint")}</p>
+              )}
+              {isOrcaRouter && (
+                <p className="text-muted-foreground text-xs">
+                  {t("profile.apiKey.orcaHint")}{" "}
+                  <a
+                    className="underline underline-offset-2"
+                    href="https://www.orcarouter.ai/console/keys"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    OrcaRouter
+                  </a>
+                </p>
               )}
             </div>
           )}

@@ -220,6 +220,19 @@ func FromEnv() (Config, bool) {
 		if c.APIKey == "" {
 			c.APIKey = strings.TrimSpace(os.Getenv("AWS_BEARER_TOKEN_BEDROCK"))
 		}
+	case "orcarouter":
+		// Named first-class provider. OpenAI chat-completions wire format; the
+		// default endpoint is OrcaRouter's own API origin, and the model list is
+		// discovered from that same origin (see OrcaRouterModelsURL).
+		c.Format = llm.FormatOpenAI
+		c.APIKey = strings.TrimSpace(os.Getenv(OrcaRouterAPIKeyEnv))
+		if strings.TrimSpace(c.BaseURL) == "" {
+			c.BaseURL = OrcaRouterAPIBase
+		}
+		c.BaseURL = openAIChatBaseURL(c.BaseURL)
+		if strings.TrimSpace(c.Model) == "" {
+			c.Model = OrcaRouterDefaultModel
+		}
 	case "ollama-remote":
 		c.Format = llm.FormatOpenAI
 		c.ContextWindowK = minWindowK
@@ -311,6 +324,15 @@ func ConfigFrom(provider, model, baseURL, apiKey, proxy string) Config {
 		c.Format = llm.FormatAnthropic
 		c.BaseURL = bedrockBaseURL(c.BaseURL)
 		c.MaxTokens = defaultBedrockMaxTokens
+	case "orcarouter":
+		c.Format = llm.FormatOpenAI
+		if c.BaseURL == "" {
+			c.BaseURL = OrcaRouterAPIBase
+		}
+		// provider appends "/chat/completions"; tolerate a full endpoint URL.
+		c.BaseURL = openAIChatBaseURL(c.BaseURL)
+		if c.Model == "" {
+			c.Model = OrcaRouterDefaultModel
 	case "ollama-remote":
 		c.Format = llm.FormatOpenAI
 		c.ContextWindowK = minWindowK
@@ -428,6 +450,10 @@ func isFalsy(s string) bool {
 func (c Config) IsOllama() bool       { return c.ProviderID == "ollama" || c.IsRemoteOllama() }
 func (c Config) IsRemoteOllama() bool { return c.ProviderID == ollamaendpoint.Remote }
 
+// IsOrcaRouter reports whether this config uses the named OrcaRouter provider.
+// It shares the OpenAI chat wire format but keeps its own identity and origin.
+func (c Config) IsOrcaRouter() bool { return c.ProviderID == OrcaRouterProviderID }
+
 // IsBedrock reports whether this config uses the Bedrock Claude Messages API.
 func (c Config) IsBedrock() bool { return c.ProviderID == "bedrock" }
 
@@ -441,6 +467,9 @@ func (c Config) IsBedrockMarketplace() bool { return c.ProviderID == "bedrock-ma
 func (c Config) Provider() string {
 	if c.IsOllama() {
 		return c.ProviderID
+	}
+	if c.IsOrcaRouter() {
+		return OrcaRouterProviderID
 	}
 	if c.IsBedrock() {
 		return "bedrock"

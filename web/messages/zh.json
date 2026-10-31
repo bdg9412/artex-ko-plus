@@ -3308,6 +3308,7 @@
         "bedrock": "Amazon Bedrock（Claude）",
         "converse": "Amazon Bedrock（Converse · 通用）",
         "marketplace": "Amazon Bedrock Marketplace（InvokeModel）",
+        "orcarouter": "OrcaRouter Cyber Inference"
         "ollamaRemote": "Ollama（远程服务器）"
       },
       "model": {
@@ -3317,7 +3318,10 @@
         "bedrockHint": "准确填写 Bedrock Claude 模型 ID 或 Claude 推理配置文件 ID。模型列表不会自动加载。此集成支持 Claude 模型。",
         "converseHint": "填写支持 Bedrock Converse 的模型 ID 或推理配置文件 ID；不限于 GLM 等特定模型。模型列表不会自动加载。",
         "marketplaceLabel": "Marketplace 端点 ARN",
-        "marketplaceHint": "填写 Bedrock → Marketplace deployments 中已部署端点的完整 arn:aws:sagemaker:… ARN。不能使用模型显示名称或基础模型 ID。目前支持标准 AWS 区域。"
+        "marketplaceHint": "填写 Bedrock → Marketplace deployments 中已部署端点的完整 arn:aws:sagemaker:… ARN。不能使用模型显示名称或基础模型 ID。目前支持标准 AWS 区域。",
+        "orcaPlaceholder": "选择模型(从目录加载)",
+        "orcaEmpty": "请先加载目录。只能从列表中选择，不能直接输入。",
+        "orcaDegraded": "未能加载实时目录，当前显示已验证的备用列表。"
       },
       "baseUrl": {
         "label": "Base URL（可选）",
@@ -3342,7 +3346,8 @@
         "placeholderSet": "已设置（{hint}），留空保持不变",
         "bedrockLabel": "Amazon Bedrock API Key（必填）",
         "bedrockPlaceholder": "Amazon Bedrock API 密钥",
-        "bedrockHint": "填写 Amazon Bedrock API 密钥。新配置必填；保存后密钥将被隐藏。"
+        "bedrockHint": "填写 Amazon Bedrock API 密钥。新配置必填；保存后密钥将被隐藏。",
+        "orcaHint": "请输入在 OrcaRouter Console 签发的 sk-orca-… 密钥，密钥只保存在服务端。"
       },
       "marketplace": {
         "region": "端点区域：{region}",
@@ -3444,6 +3449,12 @@
         "saved": "已保存",
         "saveFailed": "保存失败：{msg}"
       },
+      "orcarouter": {
+        "intro": "面向通过业务验证的安全团队的 cyber 推理 provider，可将授权范围内的安全推理请求发送到该端点。",
+        "modelsLink": "cyber 模型目录",
+        "defaultLabel": "默认模型",
+        "cyberLabel": "面向安全团队推荐的 cyber 模型（需通过业务验证）",
+        "cyberHint": "可用模型以账号的真实目录为准，刷新列表后只显示当前密钥可调用的模型。"
       "remote": {
         "urlLabel": "远程 Ollama 服务 URL",
         "hint": "输入另一台电脑或私有网络中的 Ollama 地址。Bearer 令牌由前置网关验证，建议使用 HTTPS，并始终验证证书。",

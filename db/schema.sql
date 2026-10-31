@@ -362,7 +362,7 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS llm_profiles (
     id               BIGSERIAL PRIMARY KEY,
     name             TEXT NOT NULL UNIQUE,
-    format           TEXT NOT NULL CHECK (format IN ('openai','anthropic','openai-responses','ollama','ollama-remote','bedrock','bedrock-converse','bedrock-marketplace')),
+    format           TEXT NOT NULL CHECK (format IN ('openai','anthropic','openai-responses','ollama','ollama-remote','bedrock','bedrock-converse','bedrock-marketplace','orcarouter')),
     ollama_remote    JSONB NOT NULL DEFAULT '{}'::jsonb,
     base_url         TEXT,
     proxy            TEXT,
@@ -426,7 +426,7 @@ ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS streaming    BOOLEAN NOT NULL 
 -- Ollama uses the OpenAI-compatible wire format without an API key.
 ALTER TABLE llm_profiles DROP CONSTRAINT IF EXISTS llm_profiles_format_check;
 ALTER TABLE llm_profiles ADD  CONSTRAINT llm_profiles_format_check
-    CHECK (format IN ('openai','anthropic','openai-responses','ollama','ollama-remote','bedrock','bedrock-converse','bedrock-marketplace'));
+    CHECK (format IN ('openai','anthropic','openai-responses','ollama','ollama-remote','bedrock','bedrock-converse','bedrock-marketplace','orcarouter'));
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS ollama_remote JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS invoke_schema TEXT NOT NULL DEFAULT '';
 ALTER TABLE llm_profiles ADD COLUMN IF NOT EXISTS prompt_style TEXT NOT NULL DEFAULT '';

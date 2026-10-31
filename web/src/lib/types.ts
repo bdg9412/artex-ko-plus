@@ -1050,6 +1050,7 @@ export interface LLMProfile {
     | "ollama-remote"
     | "bedrock"
     | "bedrock-converse"
+    | "orcarouter"
     | "bedrock-marketplace";
   base_url?: string;
   proxy?: string;

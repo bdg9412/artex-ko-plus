@@ -3308,6 +3308,7 @@
         "bedrock": "Amazon Bedrock (Claude)",
         "converse": "Amazon Bedrock (Converse · 범용)",
         "marketplace": "Amazon Bedrock Marketplace (InvokeModel)",
+        "orcarouter": "OrcaRouter Cyber Inference"
         "ollamaRemote": "Ollama (원격 서버)"
       },
       "model": {
@@ -3317,7 +3318,10 @@
         "bedrockHint": "Bedrock에서 사용할 Claude 모델 ID 또는 Claude 추론 프로필 ID를 정확히 입력하세요. 모델 목록은 자동으로 불러오지 않습니다. 이 연동은 Claude 모델을 지원합니다.",
         "converseHint": "Bedrock Converse를 지원하는 모델 ID 또는 추론 프로필 ID를 입력하세요. GLM 등 특정 모델로 제한하지 않습니다. 모델 목록은 자동으로 불러오지 않습니다.",
         "marketplaceLabel": "Marketplace 엔드포인트 ARN",
-        "marketplaceHint": "Bedrock → Marketplace deployments에서 배포된 엔드포인트의 전체 arn:aws:sagemaker:… ARN을 입력하세요. 모델 표시 이름이나 기초 모델 ID는 사용할 수 없습니다. 현재 일반 AWS 리전을 지원합니다."
+        "marketplaceHint": "Bedrock → Marketplace deployments에서 배포된 엔드포인트의 전체 arn:aws:sagemaker:… ARN을 입력하세요. 모델 표시 이름이나 기초 모델 ID는 사용할 수 없습니다. 현재 일반 AWS 리전을 지원합니다.",
+        "orcaPlaceholder": "모델 선택(카탈로그에서 불러오기)",
+        "orcaEmpty": "카탈로그를 불러오세요. 목록만 선택할 수 있으며 직접 입력할 수 없습니다.",
+        "orcaDegraded": "기본 카탈로그를 불러오지 못해 검증된 대체 목록을 표시합니다."
       },
       "baseUrl": {
         "label": "Base URL (선택)",
@@ -3342,7 +3346,8 @@
         "placeholderSet": "설정됨({hint}), 비우면 그대로 유지",
         "bedrockLabel": "Amazon Bedrock API Key (필수)",
         "bedrockPlaceholder": "Amazon Bedrock API 키",
-        "bedrockHint": "Amazon Bedrock API 키를 입력하세요. 새 프로필에 필요하며 저장 후에는 마스킹됩니다."
+        "bedrockHint": "Amazon Bedrock API 키를 입력하세요. 새 프로필에 필요하며 저장 후에는 마스킹됩니다.",
+        "orcaHint": "OrcaRouter Console에서 발급한 sk-orca-… 키를 입력하세요. 키는 서버에만 저장됩니다."
       },
       "marketplace": {
         "region": "엔드포인트 리전: {region}",
@@ -3444,6 +3449,12 @@
         "saved": "저장했습니다",
         "saveFailed": "저장 실패: {msg}"
       },
+      "orcarouter": {
+        "intro": "검증된 보안 팀을 위한 cyber 추론 provider입니다. 승인된 범위의 보안 추론 요청을 이 엔드포인트로 보낼 수 있습니다.",
+        "modelsLink": "cyber 모델 카탈로그",
+        "defaultLabel": "기본 모델",
+        "cyberLabel": "보안 팀 권장 cyber 모델(비즈니스 검증 후 사용 가능)",
+        "cyberHint": "사용 가능한 모델은 계정의 실제 카탈로그에서 확인합니다. 목록을 새로고침하면 현재 키로 호출 가능한 모델만 표시됩니다."
       "remote": {
         "urlLabel": "원격 Ollama 서버 URL",
         "hint": "별도 PC 또는 사설망의 Ollama 주소를 입력하세요. Bearer 인증은 앞단 게이트웨이가 검증하며 HTTPS 사용을 권장합니다. 인증서 검증은 유지됩니다.",

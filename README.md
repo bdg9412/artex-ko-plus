@@ -14,6 +14,14 @@ AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-
 
 ## 전체 기능 한눈에 보기
 
+**시스템 → LLM → 새 프로필**에서 모델 연결을 직접 선택할 수 있습니다. 화면에서 제공하는 형식은 **Anthropic**, **OpenAI (Chat Completions)**, **OpenAI (Responses API)**, **Ollama**, **Amazon Bedrock Converse**, **OrcaRouter Cyber Inference**입니다. 프로필마다 모델 ID와 연결 주소를 지정할 수 있으며, 여러 프로필을 저장해 작업의 **LLM 설정 체인**에서 선택할 수도 있습니다.  
+  
+선택 가능 모델
+-  Antropic
+-  OpenAI
+-  Ollama 로컬 모델
+-  AWS Bedrock 모델
+-  OrcaRouter Cyber Inference (API 기준 주소 `https://api.orcarouter.ai/v1`, 모델 목록 자동 조회)
 ```mermaid
 flowchart TB
     scope["허가된 자산·범위"] --> offensive["Offensive<br/>탐색·취약점 진단"]
@@ -39,10 +47,10 @@ flowchart TB
 
 ![저장된 Ollama·Bedrock 프로필 상태](docs/guide-images/llm-ollama-bedrock-status-20261026.jpg)
 
-1. 형식을 고르고 프로필 이름, 사용할 **모델 ID**, 해당 공급자의 연결 주소와 인증 정보를 입력합니다. Ollama는 API 키가 필요하지 않으며, Docker에서 호스트의 Ollama에 연결할 때는 기본 URL로 `http://host.docker.internal:11434/v1`을 사용합니다.
-2. 별도 PC의 모델 서버는 **Ollama (원격 서버)**를 선택하고 서버 URL·인증 방식·동시 요청 수·대기 및 응답 제한을 지정합니다. **서버 상태 확인**은 모델 목록과 로드 상태만 조회하고, **응답 테스트**는 실제 모델을 호출합니다.
-3. **연결 테스트**로 실제 응답을 확인한 다음 저장하고, 전역에서 사용할 프로필은 **활성으로 설정**합니다. 작업에 LLM 설정 체인을 지정했다면 그 작업의 선택을 별도로 확인합니다.
-4. Bedrock은 **Amazon Bedrock Converse**를 선택하고 해당 리전의 Runtime URL(예: `https://bedrock-runtime.ap-northeast-2.amazonaws.com`), 계정에서 사용할 수 있는 모델 ID 또는 추론 프로필 ID/ARN, **Amazon Bedrock API 키**를 입력합니다. 모델 목록은 자동 조회하지 않습니다. 모델의 직접 호출이 on-demand를 지원하지 않으면 AWS가 요구하는 추론 프로필 ID/ARN을 사용해야 합니다. 특정 모델 계열로 고정되지 않으며, 실제 Converse 지원 여부와 호출 권한은 연결 테스트에서 확인합니다.
+1. Bedrock은 **Amazon Bedrock Converse**를 선택하고 해당 리전의 Runtime URL(예: `https://bedrock-runtime.ap-northeast-2.amazonaws.com`), 계정에서 사용할 수 있는 모델 ID 또는 추론 프로필 ID/ARN, **Amazon Bedrock API 키**를 입력합니다. 모델 목록은 자동 조회하지 않습니다. 모델의 직접 호출이 on-demand를 지원하지 않으면 AWS가 요구하는 추론 프로필 ID/ARN을 사용해야 합니다. 특정 모델 계열로 고정되지 않으며, 실제 Converse 지원 여부와 호출 권한은 연결 테스트에서 확인합니다.
+2. 허가된 보안 검증 작업을 [OrcaRouter](https://www.orcarouter.ai)로 라우팅하려면 **OrcaRouter Cyber Inference**를 선택합니다. 연결 주소는 `https://api.orcarouter.ai/v1`, 인증은 `sk-orca-…` API 키이며, **모델**은 고정 목록이 아니라 해당 주소의 실시간 카탈로그에서 채워집니다. 기본값은 `orcarouter/auto`, 보안 팀 권장 모델은 `orcacyber-ultra-1.0`·`orcacyber-zero-1.5`입니다. 자세한 내용은 [OrcaRouter 프로필 안내](docs/ORCAROUTER_PROVIDER_KO.md)를 참고하세요.
+3. 별도 PC의 모델 서버는 **Ollama (원격 서버)**를 선택하고 서버 URL·인증 방식·동시 요청 수·대기 및 응답 제한을 지정합니다. **서버 상태 확인**은 모델 목록과 로드 상태만 조회하고, **응답 테스트**는 실제 모델을 호출합니다.
+4. **연결 테스트**로 실제 응답을 확인한 다음 저장하고, 전역에서 사용할 프로필은 **활성으로 설정**합니다. 작업에 LLM 설정 체인을 지정했다면 그 작업의 선택을 별도로 확인합니다.
 
 API 키, 계정별 ARN, 실제 요청·응답에 포함된 민감 정보는 README·증적·Git 기록에 넣지 마세요. 진단과 AI 기능의 응답 품질·언어·사용량은 등록한 모델에 따라 달라집니다. 작업 목표에 원하는 출력 언어를 명시하고 생성된 시나리오와 조사 결과를 원본 근거와 대조하세요. AI 침해 조사를 시작하면 선택한 취약점 근거와 로그 발췌가 설정한 모델 공급자에게 전송될 수 있습니다.
 
