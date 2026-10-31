@@ -1,6 +1,6 @@
 <div align="center">
 
-# AegisLoop
+<img src="docs/guide-images/aegisloop-hero-20261031.png" alt="AegisLoop — Discover · Hunt · Validate" width="100%">
 
 **취약점 발견부터 방어 검증·침해 조사·자율헌팅까지**
 
@@ -11,6 +11,23 @@
 </div>
 
 AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-ko](https://github.com/jiwoochris/artex-ko)를 기반으로 한 보안 검증 프로젝트입니다. 허가된 자산에서 찾은 취약점을 출발점으로 공격·탐지 시나리오를 설계하고, 실제 실행 로그로 탐지·차단 여부를 검증하며, 과거 로그에서 관련 행동을 조사합니다. 별도의 Defensive 자율헌팅은 입력한 취약점·공격 기법을 조사하고 허용한 Splunk 로그에서 관련 근거를 찾습니다.
+
+## 전체 기능 한눈에 보기
+
+```mermaid
+flowchart TB
+    scope["허가된 자산·범위"] --> offensive["Offensive<br/>탐색·취약점 진단"]
+    offensive --> finding["취약점·재현 근거"]
+    finding --> defensive["Defensive<br/>공격·탐지 시나리오"]
+    defensive --> validation["방어 검증<br/>재진단·감사/경보 대조"]
+    validation --> loop["Closed-loop<br/>개선 전후 비교·재검증"]
+    finding --> investigation["침해 조사<br/>과거 로그·AI 근거 분석"]
+
+    feeds["CISA KEV·보안 RSS<br/>자동 수집"] --> reports["위협 동향 리포트<br/>자산 제품명 단서"]
+    reports --> review["담당자 검토<br/>허용 로그 범위 확인"]
+    review --> hunt["자율헌팅<br/>리서치·시나리오·Splunk·근거 판정"]
+    finding -. "취약점 직접 입력" .-> review
+```
 
 ## 모델 선택과 출력 언어
 
@@ -30,17 +47,6 @@ AegisLoop는 [ARTEX](https://github.com/Autumn-27/ARTEX)의 [한국어판 artex-
 API 키, 계정별 ARN, 실제 요청·응답에 포함된 민감 정보는 README·증적·Git 기록에 넣지 마세요. 진단과 AI 기능의 응답 품질·언어·사용량은 등록한 모델에 따라 달라집니다. 작업 목표에 원하는 출력 언어를 명시하고 생성된 시나리오와 조사 결과를 원본 근거와 대조하세요. AI 침해 조사를 시작하면 선택한 취약점 근거와 로그 발췌가 설정한 모델 공급자에게 전송될 수 있습니다.
 
 이번 공개 소스의 빌드·테스트·비밀값 제외 확인 범위는 [배포 검증 증적](docs/RELEASE_EVIDENCE_KO.md)에 기록했습니다.
-
-```text
-Offensive: 취약점과 재현 근거
-    ↓
-Defensive: 공격·탐지 시나리오 → 방어 계획 → 실제 로그 기반 방어 검증
-    ↓
-침해 조사: 로그 근거 준비 → AI 조사 → 관측 결과와 원본 근거 확인
-
-Defensive 자율헌팅: 취약점·공격 기법 입력 → 리서치 → 시나리오 설계
-                 → Splunk 헌팅 → 근거 판정
-```
 
 ## Offensive 진단 실행
 
