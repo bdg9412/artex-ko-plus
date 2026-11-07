@@ -3308,7 +3308,7 @@
         "bedrock": "Amazon Bedrock (Claude)",
         "converse": "Amazon Bedrock (Converse · 범용)",
         "marketplace": "Amazon Bedrock Marketplace (InvokeModel)",
-        "orcarouter": "OrcaRouter Cyber Inference"
+        "orcarouter": "OrcaRouter Cyber Inference",
         "ollamaRemote": "Ollama (원격 서버)"
       },
       "model": {
@@ -3455,6 +3455,7 @@
         "defaultLabel": "기본 모델",
         "cyberLabel": "보안 팀 권장 cyber 모델(비즈니스 검증 후 사용 가능)",
         "cyberHint": "사용 가능한 모델은 계정의 실제 카탈로그에서 확인합니다. 목록을 새로고침하면 현재 키로 호출 가능한 모델만 표시됩니다."
+      },
       "remote": {
         "urlLabel": "원격 Ollama 서버 URL",
         "hint": "별도 PC 또는 사설망의 Ollama 주소를 입력하세요. Bearer 인증은 앞단 게이트웨이가 검증하며 HTTPS 사용을 권장합니다. 인증서 검증은 유지됩니다.",
